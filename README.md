@@ -64,6 +64,26 @@ Windows 下将 `.venv/bin` 替换为 `.venv\Scripts`。
 - `/logs`: 后端运行日志、ydtv.ai 请求和 Web 操作审计
 - `/settings`: Web 密码和调度器配置
 
+## 独立微信登录助手
+
+如果不想在网页中手动粘贴回调地址，可以运行独立助手。它会调用本机已安装的 Edge/Chrome，不依赖 Playwright：
+
+```powershell
+.\.venv\Scripts\python.exe wechat_login.py
+```
+
+或：
+
+```powershell
+.\.venv\Scripts\python.exe -m app.wechat_login
+```
+
+登录成功后助手会自动捕获微信回调地址、兑换 Token、导入账号并保存到 `accounts.json`。使用 `--no-import` 可以只获取回调地址：
+
+```powershell
+.\.venv\Scripts\python.exe wechat_login.py --no-import
+```
+
 ## 公网部署
 
 服务默认监听 `0.0.0.0`，可通过本机和局域网地址访问。公网访问请使用 Nginx/Caddy 反向代理并启用 HTTPS，否则 Cookie 的 `Secure` 标记会导致登录状态无法保存。
@@ -92,10 +112,12 @@ ZIP 中包含 FastAPI 运行时，不需要在服务器安装 Python，也不再
 ```text
 Windows:
   ydtv-signin.exe set-password
+  ydtv-signin.exe wechat-login
   start.bat
 
 Linux:
   ./ydtv-signin set-password
+  ./ydtv-signin wechat-login
   ./start.sh
 ```
 

@@ -6,6 +6,7 @@ data/
 config.json
 accounts.json
 .auth-profile/
+.wechat-login-profile/
 *.db
 *.db-shm
 *.db-wal

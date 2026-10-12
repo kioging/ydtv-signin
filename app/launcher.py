@@ -22,6 +22,10 @@ def main(argv: list[str] | None = None) -> int:
         from app.cli import main as cli_main
 
         return cli_main(arguments)
+    if arguments and arguments[0] == "wechat-login":
+        from app.wechat_login import main as wechat_main
+
+        return wechat_main(arguments[1:])
 
     import uvicorn
 
