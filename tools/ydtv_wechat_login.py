@@ -9,16 +9,26 @@ import sys
 import tempfile
 import threading
 import time
-import tkinter as tk
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from websockets.sync.client import connect as websocket_connect
 
+if TYPE_CHECKING:  # pragma: no cover - 仅类型检查使用
+    import tkinter as tk
+
 
 APP_TITLE = "ydtv.ai 微信登录助手"
 AUTH_STATE_URL = "https://ydtv.ai/houduan/denglu/weixin/huoququanurl"
+
+
+def load_tkinter():
+    """Delay the GUI toolkit import so headless environments can import this module."""
+    import tkinter
+
+    return tkinter
 
 
 def find_browser() -> str:
@@ -220,6 +230,7 @@ def capture_callback(port: int, timeout: float = 600) -> str:
 
 class HelperApp:
     def __init__(self, root: tk.Tk) -> None:
+        tk = load_tkinter()
         self.root = root
         self.root.title(APP_TITLE)
         self.root.geometry("680x360")
@@ -334,6 +345,7 @@ class HelperApp:
 
 
 def main() -> int:
+    tk = load_tkinter()
     root = tk.Tk()
     HelperApp(root)
     root.mainloop()
