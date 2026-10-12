@@ -30,6 +30,23 @@ jobs:
       - name: Build Windows server package
         shell: pwsh
         run: .\build\build_windows.ps1
+      - name: Smoke test Windows binary
+        shell: pwsh
+        run: |
+          $stage = "release\ydtv-signin-windows"
+          '{"web": {"host": "127.0.0.1", "port": 8850}}' |
+            Set-Content -Encoding UTF8 (Join-Path $stage "config.json")
+          $proc = Start-Process -FilePath (Join-Path $stage "ydtv-signin.exe") -PassThru -WindowStyle Hidden
+          $ok = $false
+          foreach ($i in 1..30) {
+            try {
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:8850/health" -UseBasicParsing -TimeoutSec 3
+              if ($r.Content -match "ok") { $ok = $true; Write-Host $r.Content; break }
+            } catch { }
+            Start-Sleep -Seconds 1
+          }
+          Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { throw "Windows binary smoke test failed" }
       - name: Upload Windows server package
         uses: actions/upload-artifact@v4
         with:
@@ -79,6 +96,20 @@ jobs:
         run: |
           objdump -T dist/ydtv-signin/_internal/libpython3.11.so.1.0 \
             | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -3
+      - name: Smoke test Linux binary
+        run: |
+          cd release/ydtv-signin-linux
+          printf '{"web": {"host": "127.0.0.1", "port": 8850}}' > config.json
+          ./ydtv-signin &
+          pid=$!
+          ok=0
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8850/health; then ok=1; break; fi
+            sleep 1
+          done
+          kill $pid 2>/dev/null || true
+          wait $pid 2>/dev/null || true
+          test "$ok" = "1"
       - name: Upload Linux server package
         uses: actions/upload-artifact@v4
         with:
