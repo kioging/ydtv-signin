@@ -64,25 +64,22 @@ Windows 下将 `.venv/bin` 替换为 `.venv\Scripts`。
 - `/logs`: 后端运行日志、ydtv.ai 请求和 Web 操作审计
 - `/settings`: Web 密码和调度器配置
 
-## 独立微信登录助手
+## 独立 Windows 微信登录助手
 
-如果不想在网页中手动粘贴回调地址，可以运行独立助手。它会调用本机已安装的 Edge/Chrome，不依赖 Playwright：
+面向客户的 Windows 助手单独打包，不连接服务器、不读取服务器文件：
 
-```powershell
-.\.venv\Scripts\python.exe wechat_login.py
+```text
+ydtv-wechat-login.exe
 ```
 
-或：
+使用流程：
 
-```powershell
-.\.venv\Scripts\python.exe -m app.wechat_login
-```
-
-登录成功后助手会自动捕获微信回调地址、兑换 Token、导入账号并保存到 `accounts.json`。使用 `--no-import` 可以只获取回调地址：
-
-```powershell
-.\.venv\Scripts\python.exe wechat_login.py --no-import
-```
+1. 运行 EXE
+2. 点击“开始微信登录”
+3. 助手调用本机 Edge/Chrome 打开官方微信授权页
+4. 用户扫码完成登录
+5. 助手捕获完整回调地址并自动复制到剪贴板
+6. 用户回到 Web 面板，在“添加账号 -> 微信登录”中粘贴回调地址
 
 ## 公网部署
 
@@ -94,6 +91,7 @@ Windows 原生构建：
 
 ```powershell
 .\build\build_windows.ps1
+.\build\build_wechat_windows.ps1
 ```
 
 Linux 原生构建：
@@ -106,18 +104,17 @@ bash build/build_linux.sh
 
 - `release/ydtv-signin-windows-x64.zip`
 - `release/ydtv-signin-linux-x64.zip`
+- `release/ydtv-wechat-login-windows-x64.zip`
 
 ZIP 中包含 FastAPI 运行时，不需要在服务器安装 Python，也不再包含 Playwright 或 Chromium。首次运行会生成 `config.json`。使用方式：
 
 ```text
 Windows:
   ydtv-signin.exe set-password
-  ydtv-signin.exe wechat-login
   start.bat
 
 Linux:
   ./ydtv-signin set-password
-  ./ydtv-signin wechat-login
   ./start.sh
 ```
 

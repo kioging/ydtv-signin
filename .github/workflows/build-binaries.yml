@@ -26,6 +26,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: .\build\build_windows.ps1
+      - name: Build Windows WeChat helper
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\build\build_wechat_windows.ps1
       - name: Build Linux release
         if: runner.os == 'Linux'
         shell: bash
@@ -34,4 +38,10 @@ jobs:
         with:
           name: ydtv-signin-${{ matrix.platform }}-x64
           path: release/ydtv-signin-${{ matrix.platform }}-x64.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: ydtv-wechat-login-windows-x64
+          path: release/ydtv-wechat-login-windows-x64.zip
           if-no-files-found: error

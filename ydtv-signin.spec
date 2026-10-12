@@ -27,7 +27,6 @@ hiddenimports += [
     "app.main",
     "app.scheduler",
     "app.runner",
-    "app.wechat_login",
     "uvicorn.logging",
     "uvicorn.loops.auto",
     "uvicorn.protocols.http.auto",

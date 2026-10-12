@@ -12,6 +12,8 @@ accounts.json
 *.db-wal
 build-output/
 build/ydtv-signin/
+build/ydtv-wechat-login/
+build/wechat-helper/
 build/smoke-data/
 dist/
 release/
