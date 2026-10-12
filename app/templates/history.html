@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}历史 - ydtv.ai 签到面板{% endblock %}
+{% block content %}
+<section>
+  <h1>运行记录（近 {{ days }} 天）</h1>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>时间</th><th>账号</th><th>状态</th><th>奖励</th><th>余额</th><th>信息</th></tr></thead>
+      <tbody>
+      {% for run in runs %}
+        <tr>
+          <td>{{ run.started_at }}</td>
+          <td>{{ run.account_name }}</td>
+          <td><span class="status status-{{ run.status }}">{{ run.status }}</span></td>
+          <td>{{ "%.2f"|format(run.reward) }}</td>
+          <td>{{ "%.2f"|format(run.balance) if run.balance is not none else "-" }}</td>
+          <td>{{ run.message }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">暂无记录。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+

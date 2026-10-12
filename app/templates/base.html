@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}ydtv.ai 签到面板{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  {% block scripts %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <div class="nav-left">
+      <a class="brand" href="/">ydtv.ai 签到</a>
+      <nav>
+        <a href="/">总览</a>
+        <a href="/accounts">账号</a>
+        <a href="/history">历史</a>
+        <a href="/logs">运行日志</a>
+        <a href="/settings">设置</a>
+      </nav>
+    </div>
+    <a class="logout-link" href="/logout">退出</a>
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>
+

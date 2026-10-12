@@ -1,0 +1,20 @@
+[project]
+name = "ydtv-signin"
+version = "0.1.0"
+description = "ydtv.ai automatic sign-in service with a password-protected status panel"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.143.0",
+  "uvicorn[standard]==0.54.0",
+  "APScheduler==3.11.3",
+  "httpx==0.28.1",
+  "Jinja2==3.1.6",
+  "argon2-cffi==25.1.0",
+  "python-multipart==0.0.32",
+  "playwright==1.63.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+

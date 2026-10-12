@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+logs/
+data/
+config.json
+accounts.json
+.auth-profile/
+*.db
+*.db-shm
+*.db-wal
+build-output/
+build/ydtv-signin/
+build/smoke-data/
+dist/
+release/

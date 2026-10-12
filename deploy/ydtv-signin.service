@@ -1,0 +1,21 @@
+[Unit]
+Description=ydtv.ai automatic sign-in service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ydtv-signin
+ExecStart=/opt/ydtv-signin/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8848
+Restart=always
+RestartSec=5
+User=ydtv
+Group=ydtv
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/ydtv-signin
+
+[Install]
+WantedBy=multi-user.target
+

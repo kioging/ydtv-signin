@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}运行日志 - ydtv.ai 签到面板{% endblock %}
+{% block content %}
+<section>
+  <div class="page-heading">
+    <h1>运行日志</h1>
+    <a class="action-button secondary" href="/logs">刷新</a>
+  </div>
+  <form class="log-filters" method="get" action="/logs">
+    <label>
+      级别
+      <select name="level">
+        <option value="">全部</option>
+        {% for item in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] %}
+        <option value="{{ item }}" {{ "selected" if selected_level == item }}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      分类
+      <select name="category">
+        <option value="">全部</option>
+        {% for item in categories %}
+        <option value="{{ item }}" {{ "selected" if selected_category == item }}>{{ item }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      条数
+      <input name="limit" type="number" min="20" max="1000" value="{{ limit }}">
+    </label>
+    <button class="action-button" type="submit">筛选</button>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>时间</th><th>级别</th><th>分类</th><th>来源</th><th>日志</th></tr></thead>
+      <tbody>
+      {% for item in logs %}
+        <tr>
+          <td class="log-time">{{ item.created_at }}</td>
+          <td><span class="status log-level-{{ item.level | lower }}">{{ item.level }}</span></td>
+          <td>{{ item.category }}</td>
+          <td class="log-logger">{{ item.logger }}</td>
+          <td class="log-message">{{ item.message }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">暂无日志。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

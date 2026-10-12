@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}设置 - ydtv.ai 签到面板{% endblock %}
+{% block content %}
+<section>
+  <h1>设置</h1>
+  {% if message %}<div class="auth-status success">{{ message }}</div>{% endif %}
+  {% if error %}<div class="auth-status error">{{ error }}</div>{% endif %}
+</section>
+
+<section class="settings-section">
+  <h2>Web 访问密码</h2>
+  <form class="settings-form" method="post" action="/settings/password">
+    <input name="csrf_token" type="hidden" value="{{ csrf_token }}">
+    <label>
+      当前密码
+      <input name="current_password" type="password" autocomplete="current-password" required>
+    </label>
+    <label>
+      新密码
+      <input name="new_password" type="password" minlength="8" autocomplete="new-password" required>
+    </label>
+    <label>
+      确认新密码
+      <input name="confirm_password" type="password" minlength="8" autocomplete="new-password" required>
+    </label>
+    <button class="action-button" type="submit">保存密码</button>
+  </form>
+</section>
+
+<section class="settings-section">
+  <h2>调度器</h2>
+  <form class="settings-form" method="post" action="/settings/scheduler">
+    <input name="csrf_token" type="hidden" value="{{ csrf_token }}">
+    <label class="checkbox-label">
+      <input name="enabled" type="checkbox" value="1" {{ "checked" if current.scheduler.enabled }}>
+      启用自动签到和 Token 保活
+    </label>
+    <label>
+      每日签到时间
+      <input name="daily_time" type="time" value="{{ current.scheduler.daily_time }}" required>
+    </label>
+    <label>
+      随机延迟最小值（秒）
+      <input name="jitter_min" type="number" min="0" value="{{ current.scheduler.jitter_seconds[0] }}" required>
+    </label>
+    <label>
+      随机延迟最大值（秒）
+      <input name="jitter_max" type="number" min="0" value="{{ current.scheduler.jitter_seconds[1] }}" required>
+    </label>
+    <label>
+      重试间隔（分钟）
+      <input name="retry_delay_minutes" type="number" min="1" value="{{ current.scheduler.retry_delay_minutes }}" required>
+    </label>
+    <label>
+      最大重试次数
+      <input name="max_retries" type="number" min="0" value="{{ current.scheduler.max_retries }}" required>
+    </label>
+    <label>
+      最大并发数
+      <input name="max_concurrency" type="number" min="1" value="{{ current.scheduler.max_concurrency }}" required>
+    </label>
+    <label>
+      Token 保活间隔（小时）
+      <input name="keepalive_interval_hours" type="number" min="0" value="{{ current.scheduler.keepalive_interval_hours }}" required>
+    </label>
+    <button class="action-button" type="submit">保存调度器配置</button>
+  </form>
+</section>
+{% endblock %}

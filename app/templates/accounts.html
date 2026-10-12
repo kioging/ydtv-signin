@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}账号 - ydtv.ai 签到面板{% endblock %}
+{% block scripts %}<script src="/static/accounts.js" defer></script>{% endblock %}
+{% block content %}
+<section>
+  <div class="page-heading">
+    <h1>账号概览（近 90 天）</h1>
+    <button class="action-button" id="authorize-button" type="button">添加账号</button>
+  </div>
+  <div id="auth-status" class="auth-status" hidden></div>
+  {% for account in accounts %}
+    <article class="account-card">
+      <header>
+        <div>
+          <div class="account-title">
+            {% if account.avatar_url %}
+              <img class="avatar" src="{{ account.avatar_url }}" alt="" referrerpolicy="no-referrer">
+            {% else %}<span class="avatar placeholder">{{ account.account_id[:1] | upper }}</span>{% endif %}
+            <h2>{{ account_meta.get(account.account_id, account.account_id) }}</h2>
+          </div>
+        </div>
+      </header>
+      <div class="account-actions">
+        <div class="account-meta">
+          <div class="credit-row">
+            <span class="credit-balance">
+              账户积分
+              <strong data-account-balance="{{ account.account_id }}">{{ "%.2f"|format(account.latest_balance) if account.latest_balance is not none else "--" }}</strong>
+            </span>
+            <button class="mini-refresh refresh-account-balance" data-account-id="{{ account.account_id }}" type="button">刷新</button>
+          </div>
+          <span class="token-expiry" data-token-expiry="{{ account.account_id }}">Token 有效期：{{ account.token_expiry }}</span>
+        </div>
+        <button class="action-button secondary" data-authorize="{{ account.account_id }}" data-label="{{ account_meta.get(account.account_id, account.account_id) }}" type="button">重新授权</button>
+      </div>
+      <div class="metrics compact">
+        <article><span>累计奖励</span><strong>{{ "%.2f"|format(account.reward_total) }}</strong></article>
+        <article><span>成功</span><strong>{{ account.successful }}</strong></article>
+        <article><span>失败</span><strong>{{ account.failed }}</strong></article>
+        <article><span>已签</span><strong>{{ account.signed_count }}</strong></article>
+      </div>
+      <div class="calendar">
+        {% for day in account.calendar %}
+          <span class="day {{ 'signed' if day.status in ['success', 'already_signed'] }}" title="{{ day.sign_date }} {{ day.reward }}">{{ day.sign_date[-2:] }}</span>
+        {% else %}
+          <p class="empty">暂无签到记录。</p>
+        {% endfor %}
+      </div>
+    </article>
+  {% else %}
+    <p class="empty">暂无账号数据。</p>
+  {% endfor %}
+</section>
+{% endblock %}
+

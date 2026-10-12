@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录 - ydtv.ai 签到面板</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="auth-shell">
+    <form class="login-card" method="post" action="/login">
+      <h1>ydtv.ai 签到面板</h1>
+      {% if error %}<p class="error">{{ error }}</p>{% endif %}
+      {% if message %}<p class="success-message">{{ message }}</p>{% endif %}
+      <label for="password">访问密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">登录</button>
+    </form>
+  </main>
+</body>
+</html>
+

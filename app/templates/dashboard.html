@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}总览 - ydtv.ai 签到面板{% endblock %}
+{% block scripts %}<script src="/static/dashboard.js" defer></script>{% endblock %}
+{% block content %}
+<section>
+  <h1>近 30 天总览</h1>
+  <div class="metrics">
+    <article><span>有效签到</span><strong>{{ summary.signed_days }}</strong></article>
+    <article><span>失败</span><strong>{{ summary.failed }}</strong></article>
+    <article><span>Token 失效</span><strong>{{ summary.token_invalid }}</strong></article>
+    <article><span>累计奖励</span><strong>{{ "%.2f"|format(summary.reward_total) }}</strong></article>
+  </div>
+</section>
+<section>
+  <h2>最新余额</h2>
+  <div class="metrics">
+    {% for account in summary.latest_balances_display %}
+    <article class="balance-card">
+      <div>
+        <span>{{ account.name }}</span>
+        <strong data-balance-for="{{ account.account_id }}">{{ "%.2f"|format(account.balance) }}</strong>
+        <small data-updated-for="{{ account.account_id }}">上次更新：{{ account.updated_at }}</small>
+      </div>
+      <button class="action-button secondary refresh-balance" data-account-id="{{ account.account_id }}" type="button">刷新</button>
+    </article>
+    {% else %}
+    <p class="empty">暂无余额数据。</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+

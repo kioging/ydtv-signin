@@ -1,0 +1,37 @@
+name: Build binaries
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: ubuntu-22.04
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build Windows release
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\build\build_windows.ps1
+      - name: Build Linux release
+        if: runner.os == 'Linux'
+        shell: bash
+        run: bash build/build_linux.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ydtv-signin-${{ matrix.platform }}-x64
+          path: release/ydtv-signin-${{ matrix.platform }}-x64.zip
+          if-no-files-found: error
