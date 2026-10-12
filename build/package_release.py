@@ -9,7 +9,8 @@ from pathlib import Path
 DEPLOY_README = """\
 ydtv.ai automatic sign-in service
 
-1. Set the Web password:
+1. Web panel default password: admin123
+   Change it right after the first login (Settings page), or reset it with:
    Windows: ydtv-signin.exe set-password
    Linux:   ./ydtv-signin set-password
 

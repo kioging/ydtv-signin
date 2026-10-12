@@ -82,7 +82,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "web": {
         "host": "0.0.0.0",
         "port": 8848,
-        "password_hash": "",
+        # 默认密码 admin123（Argon2id）。首次登录后请立刻在「设置」页修改，
+        # 或者执行 `./ydtv-signin set-password` 重置。
+        "password_hash": "$argon2id$v=19$m=65536,t=3,p=4$yIqbypra6gDOF6ibOGTBXA$QHazAxRXJ3TGm4EBcT9Pw0UxpKTRL+W5Y++4msRKMfo",
         "session_secret": "",
         "session_ttl_hours": 12,
         "tls_certfile": "",

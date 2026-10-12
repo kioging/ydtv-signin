@@ -11,6 +11,7 @@ from app.config import (
     update_scheduler_settings,
 )
 from app.accounts import Account, load_accounts, remove_account, save_accounts
+from app.auth import verify_password
 from app.launcher import _ssl_options
 
 
@@ -20,6 +21,11 @@ def test_default_config_created(tmp_path):
     assert path.exists()
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert raw["scheduler"]["daily_time"] == "09:05"
+    # 默认密码 admin123，可通过 set-password 或设置页修改
+    assert raw["web"]["password_hash"].startswith("$argon2id$")
+    config = load_config(path, create=False)
+    assert verify_password(config.web.password_hash, "admin123")
+    assert not verify_password(config.web.password_hash, "wrong-password")
 
 
 def test_load_config_merges_defaults(tmp_path):

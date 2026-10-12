@@ -143,16 +143,18 @@ Linux 部署包同样必须自带 Windows 的 `客户微信登录助手.exe`（�
 - `release/ydtv-signin-linux-x64.zip`
 - `release/ydtv-wechat-login-windows-x64.zip`
 
-ZIP 中包含 FastAPI 运行时，不需要在服务器安装 Python，也不再包含 Playwright 或 Chromium。首次运行会生成 `config.json`。使用方式：
+ZIP 中包含 FastAPI 运行时，不需要在服务器安装 Python，也不再包含 Playwright 或 Chromium。首次运行会生成 `config.json`。
+
+**Web 面板默认密码是 `admin123`，登录后请立刻在「设置」页修改；公网部署前务必先改掉。** 也可以在启动前用下面的命令重置密码（会同时轮换会话密钥，必须重启服务后生效）：
 
 ```text
 Windows:
   ydtv-signin.exe set-password
-  start.bat
+  start.bat            # 启动面板
 
 Linux:
   ./ydtv-signin set-password
-  ./start.sh
+  ./start.sh           # 启动面板
 ```
 
 PyInstaller 不支持 Windows/Linux 交叉编译。Windows 包需要在 Windows 构建，Linux 包需要在 Linux 构建。仓库中的 `.github/workflows/build-binaries.yml` 会在两个原生 runner 上分别生成 ZIP。
