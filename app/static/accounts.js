@@ -1,5 +1,5 @@
 const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-const wizard = document.getElementById("login-wizard");
+const loginModal = document.getElementById("login-modal");
 const loginMessage = document.getElementById("login-message");
 const captchaBlock = document.getElementById("credential-captcha");
 const captchaImage = document.getElementById("captcha-image");
@@ -60,10 +60,14 @@ function selectLoginType(type) {
 }
 
 function openWizard() {
-  wizard.hidden = false;
+  loginModal.hidden = false;
   loginMessage.hidden = true;
   selectLoginType(activeLoginType);
   if (activeLoginType !== "wechat" && !captchaId) refreshCaptcha();
+}
+
+function closeWizard() {
+  loginModal.hidden = true;
 }
 
 async function sendCode(type) {
@@ -169,8 +173,10 @@ async function completeWeChatLogin() {
 }
 
 document.getElementById("authorize-button").addEventListener("click", openWizard);
-document.getElementById("cancel-account-login").addEventListener("click", () => {
-  wizard.hidden = true;
+document.getElementById("cancel-account-login").addEventListener("click", closeWizard);
+document.getElementById("close-account-login").addEventListener("click", closeWizard);
+loginModal.addEventListener("click", (event) => {
+  if (event.target === loginModal) closeWizard();
 });
 document.getElementById("refresh-captcha").addEventListener("click", refreshCaptcha);
 document.getElementById("submit-account-login").addEventListener("click", submitCredentialLogin);
