@@ -38,3 +38,21 @@ def test_runtime_logs_filter(tmp_path):
     rows = runtime_logs(database, level="ERROR", category="调度器")
     assert len(rows) == 1
     assert rows[0]["message"] == "failed"
+
+
+def test_login_actions_are_categorized_as_authorization(tmp_path):
+    database = tmp_path / "signin.db"
+    migrate(database)
+    handler = DatabaseLogHandler(database)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    logger = logging.getLogger("app.main.test.authorization")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    logger.handlers = [handler]
+
+    logger.info("User action: account login, type=password")
+    logger.info("User action: complete WeChat account login")
+    logger.info("User action: refresh balance")
+
+    rows = runtime_logs(database, category="授权")
+    assert len(rows) == 2

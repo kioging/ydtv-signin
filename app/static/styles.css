@@ -29,7 +29,9 @@ a { color: inherit; text-decoration: none; }
 .nav-left { display: flex; align-items: center; gap: 28px; }
 .topbar nav { display: flex; gap: 18px; }
 .topbar a:hover { color: var(--accent); }
-.logout-link { margin-left: auto; }
+.logout-form { margin-left: auto; }
+.logout-button { width: auto; margin: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.logout-button:hover { color: var(--accent); background: transparent; }
 .log-filters {
   display: flex;
   align-items: flex-end;

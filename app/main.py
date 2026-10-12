@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -31,10 +30,9 @@ from .auth import (
 )
 from .config import hash_password, load_config, set_web_password, update_scheduler_settings
 from .accounts import load_accounts, remove_account
-from .account_sync import sync_account
+from .account_sync import AccountNotFoundError, sync_account
 from .balance_service import record_balance_snapshot
 from .db import (
-    is_account_deleted,
     mark_account_deleted,
     migrate,
     reconcile_account_metadata,
@@ -135,11 +133,32 @@ class WeChatCallbackRequest(BaseModel):
     callback: str = Field(min_length=1, max_length=4096)
 
 
+def security_headers_enabled() -> bool:
+    """auto: 打包部署包启用安全头，源码方式运行（本地测试）关闭。"""
+    mode = config.web.security_headers
+    if mode == "always":
+        return True
+    if mode == "never":
+        return False
+    return bool(getattr(sys, "frozen", False))
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
+    if security_headers_enabled():
+        # 打包后的部署程序默认启用完整安全头；这些头会阻止 Codex 等内嵌浏览器
+        # 注入批注浮层，所以源码方式运行（本地测试）默认不发送。
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; connect-src 'self'; font-src 'self'; object-src 'none'; "
+            "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        )
+        if is_secure_request(request):
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
     return response
 
 
@@ -187,7 +206,16 @@ async def login(request: Request, response: Response, password: Annotated[str, F
             {"error": "Too many failed attempts. Try again later.", "message": ""},
             status_code=429,
         )
-    if not config.web.password_hash or not verify_password(config.web.password_hash, password):
+    password_ok = bool(config.web.password_hash) and verify_password(config.web.password_hash, password)
+    if not password_ok:
+        # 全局阈值只拦截错误密码；正确密码始终可以登录，避免分布式尝试把管理员锁在门外。
+        if rate_limiter.is_globally_blocked():
+            return templates.TemplateResponse(
+                request,
+                "login.html",
+                {"error": "Too many failed attempts. Try again later.", "message": ""},
+                status_code=429,
+            )
         rate_limiter.record_failure(client_ip)
         return templates.TemplateResponse(request, "login.html", {"error": "Incorrect password.", "message": ""}, status_code=401)
     rate_limiter.reset(client_ip)
@@ -204,8 +232,9 @@ async def login(request: Request, response: Response, password: Annotated[str, F
     return redirect
 
 
-@app.get("/logout")
-async def logout():
+@app.post("/logout")
+async def logout(csrf_form_token: Annotated[str, Form(alias="csrf_token")]):
+    require_csrf(csrf_form_token)
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE_NAME)
     return response
@@ -594,10 +623,13 @@ async def refresh_balance(
             account.id,
             YdtvClient(config.site.base_url, config.site.api_prefix, config.site.language),
             account.token,
+            allow_create=False,
         )
         if result.balance is None:
             raise RuntimeError("Balance is missing from user information response")
         captured_at = record_balance_snapshot(DATABASE_PATH, result.account_id, result.balance)
+    except AccountNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Account not found") from error
     except Exception as error:
         logger.warning("Balance refresh failed for %s", account_id, exc_info=True)
         raise HTTPException(status_code=502, detail=f"Balance refresh failed: {error}") from error

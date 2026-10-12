@@ -3,6 +3,7 @@ import json
 import pytest
 
 from app.config import (
+    atomic_write_json,
     create_default_config,
     hash_password,
     load_config,
@@ -51,6 +52,24 @@ def test_web_tls_requires_both_files(tmp_path):
         load_config(path, create=False)
 
 
+def test_web_security_headers_default_and_values(tmp_path):
+    path = tmp_path / "config.json"
+    create_default_config(path)
+    assert load_config(path, create=False).web.security_headers == "auto"
+
+    for value in ("always", "never", "auto"):
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw["web"]["security_headers"] = value
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        assert load_config(path, create=False).web.security_headers == value
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw["web"]["security_headers"] = "sometimes"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_config(path, create=False)
+
+
 def test_ssl_options_disabled_by_default(tmp_path):
     path = tmp_path / "config.json"
     create_default_config(path)
@@ -69,6 +88,14 @@ def test_ssl_options_resolve_relative_paths(tmp_path):
     options = _ssl_options(config, tmp_path)
     assert options["ssl_certfile"] == str((tmp_path / "certs" / "panel.crt").resolve())
     assert options["ssl_keyfile"] == str((tmp_path / "certs" / "panel.key").resolve())
+
+
+def test_atomic_write_json_replaces_without_leaving_temp_files(tmp_path):
+    path = tmp_path / "value.json"
+    atomic_write_json(path, {"a": 1}, private=True)
+    atomic_write_json(path, {"a": 2}, private=True)
+    assert json.loads(path.read_text(encoding="utf-8")) == {"a": 2}
+    assert list(tmp_path.glob(".*.tmp")) == []
 
 
 def test_password_hash_roundtrip(tmp_path):

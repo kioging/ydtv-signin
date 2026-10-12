@@ -18,20 +18,45 @@ COOKIE_NAME = "ydtv_panel_session"
 class LoginRateLimiter:
     max_failures: int = 5
     lockout_seconds: int = 600
+    global_max_failures: int = 50
+    max_keys: int = 1000
+    global_key: str = "__global__"
     failures: dict[str, list[int]] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if self.failures is None:
             self.failures = {}
 
+    def _active(self, key: str, now: int) -> list[int]:
+        values = [stamp for stamp in self.failures.get(key, []) if now - stamp < self.lockout_seconds]
+        if values:
+            self.failures[key] = values
+        else:
+            self.failures.pop(key, None)
+        return values
+
+    def _prune(self, now: int) -> None:
+        for key in list(self.failures):
+            self._active(key, now)
+        while len(self.failures) > self.max_keys:
+            oldest_key = min(self.failures, key=lambda candidate: max(self.failures[candidate]))
+            self.failures.pop(oldest_key, None)
+
     def is_blocked(self, key: str) -> bool:
         now = int(time.time())
-        values = [stamp for stamp in self.failures.get(key, []) if now - stamp < self.lockout_seconds]
-        self.failures[key] = values
-        return len(values) >= self.max_failures
+        self._prune(now)
+        return len(self._active(key, now)) >= self.max_failures
+
+    def is_globally_blocked(self) -> bool:
+        now = int(time.time())
+        self._prune(now)
+        return len(self._active(self.global_key, now)) >= self.global_max_failures
 
     def record_failure(self, key: str) -> None:
-        self.failures.setdefault(key, []).append(int(time.time()))
+        now = int(time.time())
+        self.failures.setdefault(key, []).append(now)
+        self.failures.setdefault(self.global_key, []).append(now)
+        self._prune(now)
 
     def reset(self, key: str) -> None:
         self.failures.pop(key, None)

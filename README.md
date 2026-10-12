@@ -93,11 +93,15 @@ ydtv-wechat-login.exe
 
 登录 Cookie 的 `Secure` 标记是自适应的：通过 HTTPS 访问（或反向代理带上 `X-Forwarded-Proto: https`）时自动加 `Secure`，直接内网 HTTP 访问时不加，因此局域网和 HTTPS 部署都能正常保持登录状态。公网仍必须使用 HTTPS，否则密码和会话都会明文传输。
 
+安全响应头（`X-Frame-Options`、CSP、HSTS）默认按运行方式自动启用：源码方式运行（本地测试）不发送，打包后的部署程序自动发送。可在 `config.json` 的 `web.security_headers` 中指定 `auto`（默认）、`always` 或 `never`。注意这些头会阻止 Codex 等内嵌浏览器注入批注浮层，如果需要在部署后的面板上批注，把它设为 `never`。
+
 ### 方式一：反向代理（推荐）
 
 1. 修改 `config.json`，把 `web.host` 改成 `127.0.0.1`，避免 8848 端口直接暴露公网
 2. 按 `deploy/nginx-https.conf.example` 或 `deploy/Caddyfile.example` 配置反向代理并启用证书
-3. 如果反向代理和面板不在同一台机器，启动时设置 `FORWARDED_ALLOW_IPS`（uvicorn 默认只信任来自 `127.0.0.1` 的转发头）
+3. 如果反向代理和面板不在同一台机器，启动时设置 `FORWARDED_ALLOW_IPS`（uvicorn 默认只信任来自 `127.0.0.1` 的转发头）；同时确认代理传递 `X-Forwarded-For`，否则所有客户端都会被当成同一个 IP，登录限速会互相影响
+
+反代示例不再重复下发 `X-Frame-Options`、CSP、HSTS 等头，统一由应用发送。如果用源码方式部署到公网（不是打包程序），请在 `config.json` 里把 `web.security_headers` 设为 `always`，否则不会下发这些安全头。
 
 ### 方式二：服务直接启用 HTTPS
 

@@ -11,6 +11,9 @@ from .db import connect
 
 def _category_for(record: logging.LogRecord) -> str:
     logger_name = record.name
+    message = record.getMessage()
+    if "User action: account login" in message or "User action: complete WeChat account login" in message:
+        return "授权"
     if logger_name.startswith("httpx"):
         return "ydtv.ai 请求"
     if logger_name.startswith("app.scheduler") or logger_name.startswith("apscheduler"):

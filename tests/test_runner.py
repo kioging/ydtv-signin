@@ -1,9 +1,10 @@
-import json
 import threading
 import time
 
-from app.accounts import Account
-from app.db import connect, migrate
+import httpx
+
+from app.accounts import Account, save_accounts
+from app.db import connect, mark_account_deleted, migrate
 from app.runner import SigninRunner
 from app.ydtv import ApiResponse
 
@@ -28,6 +29,20 @@ class StubClient:
     def get_balance(self, token, space):
         self.calls.append("balance")
         return ApiResponse(200, {"code": 200, "data": {"余额": 20.5}})
+
+    def get_user_info(self, token, space="geren"):
+        return ApiResponse(
+            200,
+            {
+                "code": 200,
+                "data": {
+                    "id": "100",
+                    "昵称": "Horcus",
+                    "头像": "https://example.com/avatar.png",
+                    "余额": 20.5,
+                },
+            },
+        )
 
 
 def test_success_flow(tmp_path):
@@ -106,4 +121,63 @@ def test_max_concurrency_runs_accounts_in_parallel(tmp_path):
     results = runner.run(accounts, "trigger", max_concurrency=2)
     assert len(results) == 2
     assert peak == 2
+
+
+def test_sign_timeout_rechecks_status_before_retrying(tmp_path):
+    migrate(tmp_path / "db.sqlite")
+
+    class TimeoutClient(StubClient):
+        def sign(self, token, space):
+            self.calls.append("sign")
+            # The request reached the site, but the response never arrived.
+            self.signed = True
+            raise httpx.ConnectTimeout("timeout")
+
+    client = TimeoutClient()
+    runner = SigninRunner(tmp_path / "db.sqlite", client)
+    result = runner.run([Account(id="a", label="A", token="secret")], "trigger")[0]
+
+    assert result.status == "success"
+    assert "network uncertainty" in result.message
+    assert client.calls.count("sign") == 1
+    assert client.calls == ["status", "sign", "status", "balance"]
+
+
+def test_invalid_token_is_recorded_without_signing(tmp_path):
+    migrate(tmp_path / "db.sqlite")
+
+    class InvalidClient(StubClient):
+        def verify_token(self, token, space):
+            return ApiResponse(401, {"code": 401, "msg": "token expired"})
+
+    client = InvalidClient()
+    runner = SigninRunner(tmp_path / "db.sqlite", client)
+    result = runner.run([Account(id="a", label="A", token="secret")], "trigger")[0]
+
+    assert result.status == "token_invalid"
+    assert client.calls == []
+
+
+def test_deleted_account_is_skipped(tmp_path):
+    migrate(tmp_path / "db.sqlite")
+    mark_account_deleted(tmp_path / "db.sqlite", "a")
+
+    client = StubClient()
+    runner = SigninRunner(tmp_path / "db.sqlite", client)
+    result = runner.run([Account(id="a", label="A", token="secret")], "trigger")[0]
+
+    assert result.status == "deleted"
+    assert client.calls == []
+
+
+def test_keepalive_marks_account_deleted_during_sync(tmp_path):
+    migrate(tmp_path / "db.sqlite")
+    accounts_path = tmp_path / "accounts.json"
+    save_accounts(accounts_path, [])
+
+    runner = SigninRunner(tmp_path / "db.sqlite", StubClient(), accounts_path=accounts_path)
+    results = runner.run_keepalive([Account(id="a", label="A", token="secret")], "keepalive-test")
+
+    assert len(results) == 1
+    assert results[0].status == "deleted"
 

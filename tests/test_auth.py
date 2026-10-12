@@ -27,6 +27,41 @@ def test_rate_limiter():
     assert limiter.is_blocked("ip")
 
 
+def test_rate_limiter_blocks_globally_after_many_failures():
+    limiter = LoginRateLimiter(max_failures=100, lockout_seconds=60, global_max_failures=3)
+    for index in range(3):
+        limiter.record_failure(f"10.0.0.{index}")
+    assert limiter.is_globally_blocked() is True
+    assert limiter.is_blocked("203.0.113.9") is False
+
+
+def test_rate_limiter_global_flag_clears_after_window():
+    limiter = LoginRateLimiter(max_failures=5, lockout_seconds=0, global_max_failures=3)
+    for _ in range(5):
+        limiter.record_failure("203.0.113.9")
+    assert limiter.is_globally_blocked() is False
+
+
+def test_rate_limiter_keeps_key_map_bounded():
+    limiter = LoginRateLimiter(
+        max_failures=5,
+        lockout_seconds=60,
+        global_max_failures=1000,
+        max_keys=3,
+    )
+    for index in range(20):
+        limiter.record_failure(f"10.0.1.{index}")
+    assert len(limiter.failures) <= 3
+
+
+def test_rate_limiter_reset_keeps_global_counter():
+    limiter = LoginRateLimiter(max_failures=2, lockout_seconds=60, global_max_failures=100)
+    limiter.record_failure("ip")
+    limiter.reset("ip")
+    assert "ip" not in limiter.failures
+    assert limiter.is_blocked("ip") is False
+
+
 def _request(scheme: str = "http", forwarded_proto: str | None = None) -> Request:
     headers = []
     if forwarded_proto is not None:

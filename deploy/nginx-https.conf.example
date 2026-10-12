@@ -23,10 +23,10 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/your-domain.example.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    add_header Strict-Transport-Security "max-age=31536000" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "same-origin" always;
+    # 响应安全头由应用按 web.security_headers 统一发送，避免重复或取值冲突。
+    # 面板需要被 Codex 等内嵌浏览器加载才能使用批注，因此不要启用下面的头；
+    # 若确定不需要页面嵌入，可取消注释以增强防点击劫持能力。
+    # add_header X-Frame-Options "DENY" always;
 
     client_max_body_size 8m;
 

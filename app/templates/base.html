@@ -20,7 +20,10 @@
         <a href="/settings">设置</a>
       </nav>
     </div>
-    <a class="logout-link" href="/logout">退出</a>
+    <form class="logout-form" method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="logout-button" type="submit">退出</button>
+    </form>
   </header>
   <main>{% block content %}{% endblock %}</main>
 </body>

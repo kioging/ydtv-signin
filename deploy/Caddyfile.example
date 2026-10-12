@@ -11,12 +11,9 @@
 your-domain.example.com {
     encode gzip
 
-    header {
-        Strict-Transport-Security "max-age=31536000"
-        X-Frame-Options "DENY"
-        X-Content-Type-Options "nosniff"
-        Referrer-Policy "same-origin"
-    }
+    # 响应安全头由应用按 web.security_headers 统一发送，避免重复或取值冲突。
+    # 面板需要被 Codex 等内嵌浏览器加载才能使用批注，因此不要在这里添加
+    # X-Frame-Options；若确定不需要页面嵌入，再自行添加。
 
     reverse_proxy 127.0.0.1:8848 {
         header_up X-Real-IP {remote_host}

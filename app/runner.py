@@ -345,8 +345,12 @@ class SigninRunner:
                 if self._is_auth_failure(response):
                     result = AccountResult(account.id, "token_invalid", "Token is invalid; authorize this account again")
                 elif response.status_code == 200 and response.payload.get("code") in (None, 200):
-                    result = AccountResult(account.id, "success", "Token valid")
-                    self._sync_profile(account, account.token, response.payload)
+                    try:
+                        self._sync_profile(account, account.token, response.payload)
+                    except AccountNotFoundError:
+                        result = AccountResult(account.id, "deleted", "Account was deleted during keepalive")
+                    else:
+                        result = AccountResult(account.id, "success", "Token valid")
                 else:
                     result = AccountResult(account.id, "failed", str(response.payload.get("msg") or "Token verification failed"))
             except Exception as error:

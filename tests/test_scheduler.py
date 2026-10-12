@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from app.config import load_config, update_scheduler_settings
 from app.scheduler import SchedulerService
 

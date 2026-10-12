@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import getpass
+import logging
 import os
 import secrets
 import stat
@@ -10,6 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from argon2 import PasswordHasher
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,7 @@ class WebConfig:
     session_ttl_hours: int = 12
     tls_certfile: str = ""
     tls_keyfile: str = ""
+    security_headers: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -82,6 +87,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "session_ttl_hours": 12,
         "tls_certfile": "",
         "tls_keyfile": "",
+        "security_headers": "auto",
     },
     "logging": {"level": "INFO", "retention_days": 180},
 }
@@ -99,25 +105,35 @@ def _merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
 
 def atomic_write_json(path: Path, value: dict[str, Any], *, private: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    with temporary.open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(value, handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    if private:
-        if os.name == "posix":
-            os.chmod(temporary, stat.S_IRUSR | stat.S_IWUSR)
-        elif os.name == "nt":
-            # Windows: remove inherited ACEs, then grant the current user full control.
-            import subprocess
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(4)}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            json.dump(value, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        if private:
+            if os.name == "posix":
+                os.chmod(temporary, stat.S_IRUSR | stat.S_IWUSR)
+            elif os.name == "nt":
+                # Windows: remove inherited ACEs, then grant the current user full control.
+                import subprocess
 
-            subprocess.run(
-                ["icacls", str(temporary), "/inheritance:r", "/grant:r", f"{getpass.getuser()}:(F)"],
-                check=True,
-                capture_output=True,
-            )
-    os.replace(temporary, path)
+                result = subprocess.run(
+                    ["icacls", str(temporary), "/inheritance:r", "/grant:r", f"{getpass.getuser()}:(F)"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    logger.warning(
+                        "Could not restrict permissions on %s: %s",
+                        temporary,
+                        (result.stderr or result.stdout).strip(),
+                    )
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def create_default_config(path: Path) -> None:
@@ -152,6 +168,9 @@ def load_config(path: Path, *, create: bool = True) -> AppConfig:
     tls_keyfile = str(web_raw["tls_keyfile"] or "").strip()
     if bool(tls_certfile) != bool(tls_keyfile):
         raise ValueError("web.tls_certfile and web.tls_keyfile must be set together")
+    security_headers = str(web_raw["security_headers"] or "auto").strip().lower()
+    if security_headers not in {"auto", "always", "never"}:
+        raise ValueError("web.security_headers must be one of: auto, always, never")
 
     return AppConfig(
         site=SiteConfig(
@@ -177,6 +196,7 @@ def load_config(path: Path, *, create: bool = True) -> AppConfig:
             session_ttl_hours=int(web_raw["session_ttl_hours"]),
             tls_certfile=tls_certfile,
             tls_keyfile=tls_keyfile,
+            security_headers=security_headers,
         ),
         logging=LoggingConfig(
             level=str(logging_raw["level"]).upper(),

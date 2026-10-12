@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from app.account_sync import AccountNotFoundError, sync_account

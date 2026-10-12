@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse
 import getpass
 import os
+import sqlite3
 import sys
 import uuid
 from pathlib import Path
 
 from .accounts import Account, load_accounts, save_accounts
 from .config import hash_password, load_config, set_web_password
-from .db import migrate
+from .db import clear_account_tombstone, migrate
 from .ydtv import YdtvClient
 
 
@@ -46,6 +47,15 @@ def _account_add(args: argparse.Namespace) -> int:
     label = input("Display label [optional]: ").strip() or account_id
     accounts.append(Account(id=account_id, label=label, token=token))
     save_accounts(path, accounts)
+    try:
+        clear_account_tombstone(root / "data" / "signin.db", account_id)
+    except sqlite3.Error as error:
+        print(
+            f"Account saved, but could not clear its deleted-account marker: {error}",
+            file=sys.stderr,
+        )
+        print("Run this command again after closing the service, or delete it in the Web panel.", file=sys.stderr)
+        return 2
     print("Account saved.")
     return 0
 
