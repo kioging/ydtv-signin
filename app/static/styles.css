@@ -160,26 +160,23 @@ h1, h2 { margin: 0 0 16px; }
   font-size: 22px;
   line-height: 1;
 }
-.login-tabs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.login-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .login-tab {
-  width: 100%;
+  width: auto;
   margin: 0;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #eef2f6;
   color: var(--text);
-  text-align: left;
 }
 .login-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.login-panel { display: flex; flex-direction: column; gap: 14px; }
-.login-panel label { width: 100%; }
-.login-panel input { width: 100%; }
-.code-row, .captcha-row { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-.code-row button, .captcha-row button { width: 100%; margin: 0; padding: 8px 10px; }
+.login-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.code-row, .captcha-row { display: flex; align-items: center; gap: 8px; }
+.code-row button, .captcha-row button { width: auto; margin: 4px 0 0; padding: 8px 10px; }
 .captcha-row img {
-  width: 100%;
-  height: 48px;
+  width: 120px;
+  height: 38px;
   object-fit: cover;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -188,8 +185,7 @@ h1, h2 { margin: 0 0 16px; }
 .credential-captcha { margin-top: 14px; }
 .agreement-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; }
 .agreement-row input { width: auto; }
-.login-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-.login-actions .action-button { width: 100%; text-align: center; }
+.login-actions { display: flex; gap: 10px; margin-top: 14px; }
 .login-wizard .auth-status { margin: 14px 0 0; }
 .wechat-actions { display: flex; flex-direction: column; gap: 10px; }
 .wechat-actions .action-button { display: block; width: 100%; text-align: center; }
