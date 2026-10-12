@@ -4,12 +4,10 @@ import argparse
 import getpass
 import os
 import sys
-import time
 import uuid
 from pathlib import Path
 
 from .accounts import Account, load_accounts, save_accounts
-from .auth_flow import AuthFlowManager
 from .config import hash_password, load_config, set_web_password
 from .db import migrate
 from .ydtv import YdtvClient
@@ -37,7 +35,7 @@ def _account_add(args: argparse.Namespace) -> int:
     root = _root_dir(args.root)
     path = root / "accounts.json"
     accounts = load_accounts(path)
-    account_id = args.account_id or f"account-{len(accounts) + 1}"
+    account_id = args.account_id or f"account-{uuid.uuid4().hex[:8]}"
     if any(account.id == account_id for account in accounts):
         print(f"Account id already exists: {account_id}", file=sys.stderr)
         return 1
@@ -70,47 +68,6 @@ def _account_test(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
-def _account_authorize(args: argparse.Namespace) -> int:
-    root = _root_dir(args.root)
-    config = load_config(root / "config.json")
-    accounts_path = root / "accounts.json"
-    account_id = args.account_id or f"account-{uuid.uuid4().hex[:8]}"
-    existing = next((account for account in load_accounts(accounts_path) if account.id == account_id), None)
-    label = existing.label if existing else account_id
-    manager = AuthFlowManager(
-        accounts_path,
-        root / ".auth-profile",
-        YdtvClient(config.site.base_url, config.site.api_prefix, config.site.language),
-    )
-    flow_id = manager.start(account_id, label, f"{config.site.base_url}/home")
-    last_message = ""
-    while True:
-        status = manager.status(flow_id)
-        if status is None:
-            print("Authorization flow disappeared.", file=sys.stderr)
-            return 1
-        if status.message != last_message:
-            print(status.message)
-            last_message = status.message
-        if status.state == "success":
-            return 0
-        if status.state in {"failed", "timeout"}:
-            print(status.message, file=sys.stderr)
-            return 1
-        time.sleep(1)
-
-
-def _browser_install(args: argparse.Namespace) -> int:
-    from playwright.__main__ import main as playwright_main
-
-    sys.argv = ["playwright", "install", "chromium"]
-    try:
-        playwright_main()
-    except SystemExit as error:
-        return int(error.code or 0)
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ydtv.ai sign-in service CLI")
     parser.add_argument("--root", help="Application data directory")
@@ -121,11 +78,6 @@ def main(argv: list[str] | None = None) -> int:
     add = account_sub.add_parser("add")
     add.add_argument("account_id", nargs="?")
     account_sub.add_parser("test")
-    authorize = account_sub.add_parser("authorize")
-    authorize.add_argument("account_id", nargs="?")
-    browser = commands.add_parser("browser")
-    browser_sub = browser.add_subparsers(dest="browser_command", required=True)
-    browser_sub.add_parser("install")
     args = parser.parse_args(argv)
 
     root = _root_dir(args.root)
@@ -137,10 +89,6 @@ def main(argv: list[str] | None = None) -> int:
         return _account_add(args)
     if args.command == "account" and args.account_command == "test":
         return _account_test(args)
-    if args.command == "account" and args.account_command == "authorize":
-        return _account_authorize(args)
-    if args.command == "browser" and args.browser_command == "install":
-        return _browser_install(args)
     return 1
 
 

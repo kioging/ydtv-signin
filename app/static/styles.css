@@ -123,6 +123,47 @@ h1, h2 { margin: 0 0 16px; }
 .auth-status.success { color: #166534; background: #dcfce7; border-color: #86efac; }
 .auth-status.error { color: var(--danger); background: #fee2e2; border-color: #fecaca; }
 .auth-status.pending { color: #92400e; background: #fef3c7; border-color: #fcd34d; }
+.login-wizard {
+  margin-bottom: 18px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.login-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.login-tab {
+  width: auto;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #eef2f6;
+  color: var(--text);
+}
+.login-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.login-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.code-row, .captcha-row { display: flex; align-items: center; gap: 8px; }
+.code-row button, .captcha-row button { width: auto; margin: 4px 0 0; padding: 8px 10px; }
+.captcha-row img {
+  width: 120px;
+  height: 38px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}
+.credential-captcha { margin-top: 14px; }
+.agreement-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; }
+.agreement-row input { width: auto; }
+.login-actions { display: flex; gap: 10px; margin-top: 14px; }
+textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  resize: vertical;
+  font: inherit;
+}
 .metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

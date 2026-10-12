@@ -14,7 +14,7 @@ datas = [
 binaries = []
 hiddenimports = []
 
-for package in ("uvicorn", "apscheduler", "playwright", "argon2"):
+for package in ("uvicorn", "apscheduler", "argon2"):
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
     datas += package_datas
     binaries += package_binaries
@@ -26,7 +26,6 @@ hiddenimports += collect_submodules("starlette")
 hiddenimports += [
     "app.main",
     "app.scheduler",
-    "app.auth_flow",
     "app.runner",
     "uvicorn.logging",
     "uvicorn.loops.auto",
@@ -34,10 +33,6 @@ hiddenimports += [
     "uvicorn.protocols.websockets.auto",
     "uvicorn.lifespan.on",
 ]
-
-browser_path = os.environ.get("YDTV_BUNDLE_BROWSERS", "").strip()
-if browser_path and Path(browser_path).exists():
-    datas.append((browser_path, "ms-playwright"))
 
 a = Analysis(
     [str(project_root / "app" / "launcher.py")],

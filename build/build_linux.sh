@@ -10,12 +10,6 @@ fi
 
 .venv/bin/python -m pip install -r requirements-build.txt
 
-BROWSER_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
-if [[ ! -d "$BROWSER_PATH" ]]; then
-  PLAYWRIGHT_BROWSERS_PATH="$BROWSER_PATH" .venv/bin/python -m playwright install chromium
-fi
-
-export YDTV_BUNDLE_BROWSERS="$BROWSER_PATH"
 .venv/bin/python -m PyInstaller --noconfirm --clean ydtv-signin.spec
 mkdir -p release
 .venv/bin/python build/package_release.py --dist dist/ydtv-signin --output release --platform linux

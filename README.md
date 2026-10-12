@@ -7,7 +7,6 @@
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
-.\.venv\Scripts\python -m playwright install chromium
 ```
 
 Linux/macOS:
@@ -15,7 +14,6 @@ Linux/macOS:
 ```bash
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m playwright install chromium
 ```
 
 ## 初始化
@@ -32,25 +30,16 @@ python3.11 -m venv .venv
 .venv/bin/python -m app.cli set-password
 ```
 
-3. 打开面板 `/accounts`，点击“授权登录”。服务会打开一个受控浏览器窗口，你在其中扫码或输入账号密码后，服务会自动保存 Token。
+3. 打开面板 `/accounts`，点击“添加账号”。面板支持四种登录方式：
 
-每个账号使用独立的浏览器 profile（`.auth-profile/<account-id>/`），因此可以依次添加多个不同账号。重复登录同一个 ydtv.ai 用户时会自动覆盖原 Token，不会重复添加。
+- 密码登录：输入账号、密码和图形验证码
+- 手机登录：输入手机号、图形验证码和短信验证码
+- 邮箱登录：输入邮箱、图形验证码和邮箱验证码
+- 微信登录：面板打开官方微信授权窗口，完成登录后将最终回调地址粘贴回面板
 
-### 长期服务授权
+密码、手机、邮箱登录不依赖浏览器自动化。微信登录也仅使用普通浏览器完成官方 OAuth，不需要 Playwright 或 Chromium。
 
-如果 Web 服务作为 systemd、NSSM 或后台进程运行，它通常不能直接显示登录窗口。请在需要授权的用户桌面终端中运行：
-
-```bash
-.venv/bin/python -m app.cli account authorize
-```
-
-Windows:
-
-```powershell
-.\.venv\Scripts\python.exe -m app.cli account authorize
-```
-
-授权助手会在当前桌面打开浏览器，完成登录后直接更新同一份 `accounts.json` 和数据库。
+重复登录同一个 ydtv.ai 用户时会根据用户 ID 覆盖原 Token，不会重复添加账号。
 
 4. 导入账号:
 
@@ -73,6 +62,7 @@ Windows 下将 `.venv/bin` 替换为 `.venv\Scripts`。
 - `/accounts`: 账号、日历和余额
 - `/history`: 运行历史
 - `/logs`: 后端运行日志、ydtv.ai 请求和 Web 操作审计
+- `/settings`: Web 密码和调度器配置
 
 ## 公网部署
 
@@ -97,17 +87,15 @@ bash build/build_linux.sh
 - `release/ydtv-signin-windows-x64.zip`
 - `release/ydtv-signin-linux-x64.zip`
 
-ZIP 中包含 FastAPI、Playwright 驱动和对应平台的 Chromium，不需要在服务器安装 Python。首次运行会生成 `config.json`。使用方式：
+ZIP 中包含 FastAPI 运行时，不需要在服务器安装 Python，也不再包含 Playwright 或 Chromium。首次运行会生成 `config.json`。使用方式：
 
 ```text
 Windows:
   ydtv-signin.exe set-password
-  ydtv-signin.exe account authorize
   start.bat
 
 Linux:
   ./ydtv-signin set-password
-  ./ydtv-signin account authorize
   ./start.sh
 ```
 

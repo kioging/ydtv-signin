@@ -15,8 +15,6 @@ def _category_for(record: logging.LogRecord) -> str:
         return "ydtv.ai 请求"
     if logger_name.startswith("app.scheduler") or logger_name.startswith("apscheduler"):
         return "调度器"
-    if logger_name.startswith("app.auth_flow"):
-        return "授权"
     if logger_name.startswith("app.runner"):
         return "签到"
     if logger_name.startswith("app.main"):

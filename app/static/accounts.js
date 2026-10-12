@@ -1,71 +1,188 @@
-const statusBox = document.getElementById("auth-status");
-let activeFlow = null;
-let pollStartedAt = 0;
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+const wizard = document.getElementById("login-wizard");
+const loginMessage = document.getElementById("login-message");
+const captchaBlock = document.getElementById("credential-captcha");
+const captchaImage = document.getElementById("captcha-image");
+const captchaAnswer = document.getElementById("captcha-answer");
+let activeLoginType = "password";
+let captchaId = "";
 
-async function startAuthorization(accountId, label) {
-  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-  const response = await fetch("/dashboard/api/auth/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-    body: JSON.stringify({ account_id: accountId || "", label: label || "" }),
+function showLoginMessage(state, message) {
+  loginMessage.hidden = false;
+  loginMessage.className = `auth-status ${state}`;
+  loginMessage.textContent = message;
+}
+
+async function apiFetch(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": csrfToken,
+      ...(options.headers || {}),
+    },
   });
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
   if (!response.ok) {
-    showStatus("error", "授权请求失败");
-    return;
+    throw new Error(payload?.detail || `HTTP ${response.status}`);
   }
-  const data = await response.json();
-  activeFlow = data.flow_id;
-  pollStartedAt = Date.now();
-  showStatus("pending", "等待登录完成");
-  pollStatus();
+  return payload;
 }
 
-async function pollStatus() {
-  if (!activeFlow) return;
-  if (Date.now() - pollStartedAt > 600000) {
-    showStatus("error", "授权状态等待超时");
-    activeFlow = null;
-    return;
+async function refreshCaptcha() {
+  captchaAnswer.value = "";
+  captchaImage.removeAttribute("src");
+  try {
+    const data = await apiFetch("/dashboard/api/account-login/captcha");
+    captchaId = data.captcha_id;
+    captchaImage.src = data.image;
+  } catch (error) {
+    captchaId = "";
+    showLoginMessage("error", error.message);
   }
-  const response = await fetch(`/dashboard/api/auth/status/${activeFlow}`);
-  if (!response.ok) {
-    showStatus("error", "授权状态已失效");
-    activeFlow = null;
-    return;
-  }
-  const data = await response.json();
-  if (data.state === "success") {
-    showStatus("success", data.message);
-    setTimeout(() => window.location.reload(), 2500);
-    return;
-  }
-  if (data.state === "failed" || data.state === "timeout") {
-    showStatus("error", data.message);
-    activeFlow = null;
-    return;
-  }
-  showStatus("pending", data.message);
-  setTimeout(pollStatus, 1500);
 }
 
-function showStatus(state, message) {
-  if (!statusBox) return;
-  statusBox.hidden = false;
-  statusBox.className = `auth-status ${state}`;
-  statusBox.textContent = message;
-}
-
-const authorizeButton = document.getElementById("authorize-button");
-if (authorizeButton) {
-  authorizeButton.addEventListener("click", async () => {
-    await startAuthorization("", "");
+function selectLoginType(type) {
+  activeLoginType = type;
+  document.querySelectorAll("[data-login-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.loginTab === type);
   });
+  document.querySelectorAll("[data-login-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.loginPanel !== type;
+  });
+  captchaBlock.hidden = type === "wechat";
+  document.getElementById("submit-account-login").hidden = type === "wechat";
 }
 
+function openWizard() {
+  wizard.hidden = false;
+  loginMessage.hidden = true;
+  selectLoginType(activeLoginType);
+  if (activeLoginType !== "wechat" && !captchaId) refreshCaptcha();
+}
+
+async function sendCode(type) {
+  const account = document.getElementById(`${type}-account`).value.trim();
+  const captcha = captchaAnswer.value.trim();
+  if (!captchaId || !captcha) {
+    showLoginMessage("error", "请先填写图形验证码");
+    return;
+  }
+  try {
+    const result = await apiFetch("/dashboard/api/account-login/send-code", {
+      method: "POST",
+      body: JSON.stringify({
+        type,
+        account,
+        captcha_id: captchaId,
+        captcha_answer: captcha,
+      }),
+    });
+    showLoginMessage("success", result.message || "验证码已发送");
+  } catch (error) {
+    showLoginMessage("error", error.message);
+  }
+}
+
+async function submitCredentialLogin() {
+  if (!document.getElementById("login-agreement").checked) {
+    showLoginMessage("error", "请先同意用户协议和隐私政策");
+    return;
+  }
+  const captcha = captchaAnswer.value.trim();
+  if (!captchaId || !captcha) {
+    showLoginMessage("error", "请先填写图形验证码");
+    return;
+  }
+  let account = "";
+  let password = "";
+  let code = "";
+  if (activeLoginType === "password") {
+    account = document.getElementById("password-account").value.trim();
+    password = document.getElementById("password-value").value;
+  } else if (activeLoginType === "phone") {
+    account = document.getElementById("phone-account").value.trim();
+    code = document.getElementById("phone-code").value.trim();
+  } else {
+    account = document.getElementById("email-account").value.trim();
+    code = document.getElementById("email-code").value.trim();
+  }
+  showLoginMessage("pending", "正在登录并验证账号…");
+  try {
+    const result = await apiFetch("/dashboard/api/account-login/login", {
+      method: "POST",
+      body: JSON.stringify({
+        type: activeLoginType,
+        account,
+        password,
+        code,
+        captcha_id: captchaId,
+        captcha_answer: captcha,
+      }),
+    });
+    showLoginMessage("success", result.created ? `新账号 ${result.name} 已添加` : `账号 ${result.name} 已存在，凭证已更新`);
+    setTimeout(() => window.location.reload(), 2200);
+  } catch (error) {
+    showLoginMessage("error", error.message);
+    captchaId = "";
+    refreshCaptcha();
+  }
+}
+
+async function startWeChatLogin() {
+  const popup = window.open("", "ydtv-wechat-login", "width=520,height=720");
+  try {
+    const result = await apiFetch("/dashboard/api/account-login/wechat/start", {
+      method: "POST",
+      body: "{}",
+    });
+    if (popup) popup.location.href = result.url;
+    showLoginMessage("pending", "请在新窗口完成微信登录，然后粘贴最终回调地址");
+  } catch (error) {
+    if (popup) popup.close();
+    showLoginMessage("error", error.message);
+  }
+}
+
+async function completeWeChatLogin() {
+  const callback = document.getElementById("wechat-callback").value.trim();
+  if (!callback) {
+    showLoginMessage("error", "请粘贴微信登录后的最终回调地址");
+    return;
+  }
+  showLoginMessage("pending", "正在导入微信登录结果…");
+  try {
+    const result = await apiFetch("/dashboard/api/account-login/wechat/callback", {
+      method: "POST",
+      body: JSON.stringify({ callback }),
+    });
+    showLoginMessage("success", result.created ? `新账号 ${result.name} 已添加` : `账号 ${result.name} 已存在，凭证已更新`);
+    setTimeout(() => window.location.reload(), 2200);
+  } catch (error) {
+    showLoginMessage("error", error.message);
+  }
+}
+
+document.getElementById("authorize-button").addEventListener("click", openWizard);
+document.getElementById("cancel-account-login").addEventListener("click", () => {
+  wizard.hidden = true;
+});
+document.getElementById("refresh-captcha").addEventListener("click", refreshCaptcha);
+document.getElementById("submit-account-login").addEventListener("click", submitCredentialLogin);
+document.getElementById("send-phone-code").addEventListener("click", () => sendCode("phone"));
+document.getElementById("send-email-code").addEventListener("click", () => sendCode("email"));
+document.getElementById("start-wechat-login").addEventListener("click", startWeChatLogin);
+document.getElementById("complete-wechat-login").addEventListener("click", completeWeChatLogin);
+document.querySelectorAll("[data-login-tab]").forEach((button) => {
+  button.addEventListener("click", () => selectLoginType(button.dataset.loginTab));
+});
 document.querySelectorAll("[data-authorize]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    await startAuthorization(button.dataset.authorize, button.dataset.label);
-  });
+  button.addEventListener("click", openWizard);
 });
 
 document.querySelectorAll(".refresh-account-balance").forEach((button) => {
@@ -77,15 +194,10 @@ document.querySelectorAll(".refresh-account-balance").forEach((button) => {
     button.disabled = true;
     button.textContent = "刷新中";
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-      const response = await fetch(`/dashboard/api/accounts/${encodeURIComponent(accountId)}/balance/refresh`, {
+      const data = await apiFetch(`/dashboard/api/accounts/${encodeURIComponent(accountId)}/balance/refresh`, {
         method: "POST",
-        headers: { "X-CSRF-Token": csrfToken },
+        body: "{}",
       });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const data = await response.json();
       if (balanceNode) balanceNode.textContent = Number(data.balance).toFixed(2);
       if (expiryNode) expiryNode.textContent = `Token 有效期：${data.token_expires_at}`;
       button.textContent = "已刷新";

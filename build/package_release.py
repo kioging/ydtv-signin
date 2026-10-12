@@ -14,8 +14,8 @@ ydtv.ai automatic sign-in service
    Linux:   ./ydtv-signin set-password
 
 2. Add an account:
-   Windows: ydtv-signin.exe account authorize
-   Linux:   ./ydtv-signin account authorize
+   Open the Web panel /accounts page and use password, phone, email or WeChat login.
+   A Token can also be imported with: account add
 
 3. Start the service:
    Windows: start.bat

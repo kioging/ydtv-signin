@@ -8,7 +8,8 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
+from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request, Response
@@ -28,7 +29,6 @@ from .auth import (
 )
 from .config import hash_password, load_config, set_web_password, update_scheduler_settings
 from .accounts import load_accounts
-from .auth_flow import AuthFlowManager
 from .account_sync import sync_account
 from .balance_service import record_balance_snapshot
 from .db import migrate
@@ -51,7 +51,6 @@ DATA_DEFAULT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 DATA_ROOT = Path(os.environ.get("YDTV_DATA_DIR", str(DATA_DEFAULT))).resolve()
 CONFIG_PATH = DATA_ROOT / "config.json"
 ACCOUNTS_PATH = DATA_ROOT / "accounts.json"
-AUTH_PROFILE_PATH = DATA_ROOT / ".auth-profile"
 DATABASE_PATH = DATA_ROOT / "data" / "signin.db"
 
 config = load_config(CONFIG_PATH)
@@ -72,13 +71,6 @@ runner = SigninRunner(
 scheduler_service = SchedulerService(config, ACCOUNTS_PATH, DATABASE_PATH, runner)
 scheduler_service.start()
 logger.info("Application service started; scheduler and web panel are ready")
-auth_flow_manager = AuthFlowManager(
-    ACCOUNTS_PATH,
-    AUTH_PROFILE_PATH,
-    YdtvClient(config.site.base_url, config.site.api_prefix, config.site.language),
-)
-
-
 def local_time_text(value: str | None) -> str:
     if not value:
         return "暂无记录"
@@ -112,9 +104,24 @@ def token_expiry_text(value: str) -> str:
     return f"{value}（剩余 {remaining.days} 天 {remaining.seconds // 3600} 小时）"
 
 
-class AuthStartRequest(BaseModel):
-    account_id: str = Field(default="", min_length=0, max_length=64)
-    label: str = Field(default="", min_length=0, max_length=64)
+class SendLoginCodeRequest(BaseModel):
+    type: Literal["phone", "email"]
+    account: str = Field(min_length=1, max_length=254)
+    captcha_id: str = Field(min_length=1, max_length=128)
+    captcha_answer: str = Field(min_length=1, max_length=16)
+
+
+class AccountLoginRequest(BaseModel):
+    type: Literal["password", "phone", "email"]
+    account: str = Field(min_length=1, max_length=254)
+    password: str = Field(default="", max_length=256)
+    code: str = Field(default="", max_length=16)
+    captcha_id: str = Field(min_length=1, max_length=128)
+    captcha_answer: str = Field(min_length=1, max_length=16)
+
+
+class WeChatCallbackRequest(BaseModel):
+    callback: str = Field(min_length=1, max_length=4096)
 
 
 @app.middleware("http")
@@ -380,35 +387,149 @@ async def accounts_page(request: Request, _: None = Depends(require_auth)):
     )
 
 
-@app.post("/dashboard/api/auth/start")
-async def start_auth(
-    request: AuthStartRequest,
+def login_client() -> YdtvClient:
+    return YdtvClient(config.site.base_url, config.site.api_prefix, config.site.language)
+
+
+def response_error(response, fallback: str = "登录请求失败") -> str:
+    return str(response.payload.get("msg") or response.payload.get("message") or fallback)
+
+
+def require_login_token(response, fallback: str = "登录失败") -> str:
+    if response.status_code != 200 or response.payload.get("code") != 200:
+        raise HTTPException(status_code=400, detail=response_error(response, fallback))
+    data = response.payload.get("data") if isinstance(response.payload.get("data"), dict) else {}
+    token = str(data.get("token") or "")
+    if not token:
+        raise HTTPException(status_code=400, detail="登录响应未返回 Token")
+    return token
+
+
+def save_logged_in_account(client: YdtvClient, token: str) -> dict:
+    account_id = f"account-{uuid.uuid4().hex[:8]}"
+    result = sync_account(ACCOUNTS_PATH, DATABASE_PATH, account_id, client, token)
+    return {
+        "account_id": result.account_id,
+        "name": result.label,
+        "created": result.created,
+        "balance": result.balance,
+        "token_expires_at": token_expiry_text(result.token_expires_at),
+    }
+
+
+@app.get("/dashboard/api/account-login/captcha")
+async def account_login_captcha(_: None = Depends(require_auth)):
+    response = login_client().get_captcha()
+    if response.status_code != 200 or response.payload.get("code") != 200:
+        raise HTTPException(status_code=502, detail=response_error(response, "验证码获取失败"))
+    data = response.payload.get("data") or {}
+    return JSONResponse(
+        {
+            "captcha_id": str(data.get("验证码ID") or ""),
+            "image": str(data.get("图片base64") or ""),
+        }
+    )
+
+
+@app.post("/dashboard/api/account-login/send-code")
+async def account_login_send_code(
+    payload: SendLoginCodeRequest,
     csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
     _: None = Depends(require_auth),
 ):
     require_csrf(csrf_header)
-    accounts = load_accounts(ACCOUNTS_PATH)
-    account_id = request.account_id.strip()
-    if not account_id:
-        account_id = f"account-{uuid.uuid4().hex[:8]}"
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", account_id):
-        raise HTTPException(status_code=400, detail="Account ID may contain letters, numbers, underscore and hyphen only")
-    label = request.label.strip() or next(
-        (account.label for account in accounts if account.id == account_id),
-        account_id,
-    )
-    action = "重新授权" if request.account_id.strip() else "添加账号"
-    logger.info("User action: %s, account_id=%s", action, account_id)
-    flow_id = auth_flow_manager.start(account_id, label, f"{config.site.base_url}/home")
-    return JSONResponse({"flow_id": flow_id, "account_id": account_id})
+    client = login_client()
+    if payload.type == "phone":
+        if not re.fullmatch(r"1[3-9]\d{9}", payload.account):
+            raise HTTPException(status_code=400, detail="手机号码格式不正确")
+        response = client.request_phone_code(payload.account, payload.captcha_id, payload.captcha_answer)
+    else:
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", payload.account):
+            raise HTTPException(status_code=400, detail="邮箱格式不正确")
+        response = client.request_email_code(payload.account, payload.captcha_id, payload.captcha_answer)
+    if response.status_code != 200 or response.payload.get("code") != 200:
+        raise HTTPException(status_code=400, detail=response_error(response, "验证码发送失败"))
+    logger.info("User action: send login code, type=%s", payload.type)
+    return JSONResponse({"ok": True, "message": str(response.payload.get("msg") or "验证码已发送")})
 
 
-@app.get("/dashboard/api/auth/status/{flow_id}")
-async def auth_status(flow_id: str, _: None = Depends(require_auth)):
-    status = auth_flow_manager.status(flow_id)
-    if status is None:
-        raise HTTPException(status_code=404, detail="Authorization flow not found")
-    return JSONResponse(vars(status))
+@app.post("/dashboard/api/account-login/login")
+async def account_login(
+    payload: AccountLoginRequest,
+    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    _: None = Depends(require_auth),
+):
+    require_csrf(csrf_header)
+    client = login_client()
+    if payload.type == "password":
+        if not payload.password:
+            raise HTTPException(status_code=400, detail="请输入密码")
+        response = client.login_password(
+            payload.account,
+            payload.password,
+            payload.captcha_id,
+            payload.captcha_answer,
+        )
+    elif payload.type == "phone":
+        if not payload.code:
+            raise HTTPException(status_code=400, detail="请输入短信验证码")
+        response = client.login_phone(
+            payload.account,
+            payload.code,
+            payload.captcha_id,
+            payload.captcha_answer,
+        )
+    else:
+        if not payload.code:
+            raise HTTPException(status_code=400, detail="请输入邮箱验证码")
+        response = client.login_email(
+            payload.account,
+            payload.code,
+            payload.captcha_id,
+            payload.captcha_answer,
+        )
+    token = require_login_token(response)
+    logger.info("User action: account login, type=%s", payload.type)
+    return JSONResponse({"ok": True, **save_logged_in_account(client, token)})
+
+
+@app.post("/dashboard/api/account-login/wechat/start")
+async def account_login_wechat_start(
+    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    _: None = Depends(require_auth),
+):
+    require_csrf(csrf_header)
+    domain = urlparse(config.site.base_url).hostname or "ydtv.ai"
+    response = login_client().get_wechat_auth_url(domain)
+    if response.status_code != 200 or response.payload.get("code") != 200:
+        raise HTTPException(status_code=400, detail=response_error(response, "微信授权地址获取失败"))
+    data = response.payload.get("data") or {}
+    auth_url = str(data.get("authUrl") or "")
+    if not auth_url:
+        raise HTTPException(status_code=502, detail="微信授权地址为空")
+    logger.info("User action: start WeChat account login")
+    return JSONResponse({"url": auth_url, "state": str(data.get("state") or "")})
+
+
+@app.post("/dashboard/api/account-login/wechat/callback")
+async def account_login_wechat_callback(
+    payload: WeChatCallbackRequest,
+    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    _: None = Depends(require_auth),
+):
+    require_csrf(csrf_header)
+    callback = payload.callback.strip()
+    code = callback
+    if callback.startswith("http://") or callback.startswith("https://"):
+        code = str((parse_qs(urlparse(callback).query).get("code") or [""])[0])
+    if not code:
+        raise HTTPException(status_code=400, detail="未从回调地址中找到 code")
+    domain = urlparse(config.site.base_url).hostname or "ydtv.ai"
+    client = login_client()
+    response = client.login_wechat(code, domain)
+    token = require_login_token(response, "微信登录失败")
+    logger.info("User action: complete WeChat account login")
+    return JSONResponse({"ok": True, **save_logged_in_account(client, token)})
 
 
 @app.get("/dashboard/api/summary")

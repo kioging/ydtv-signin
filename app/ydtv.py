@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
+import platform
 import random
 import string
+import time
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -67,13 +72,54 @@ class YdtvClient:
         self._transport = transport
         self._timeout = timeout
 
-    def _headers(self, token: str, space: str = "geren") -> dict[str, str]:
-        return {
+    def _headers(self, token: str | None, space: str = "geren") -> dict[str, str]:
+        headers = {
             "Content-Type": "application/json",
             "Accept-Language": self._language,
             "x-kongjian": space,
-            "token": encode_token(token),
         }
+        if token:
+            headers["token"] = encode_token(token)
+        return headers
+
+    def _device_id(self) -> str:
+        seed = f"{platform.node()}|{platform.system()}|{uuid.getnode()}"
+        return "web_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:32]
+
+    def _behavior_pack(self) -> str:
+        return json.dumps(
+            {
+                "v": 1,
+                "ts": int(time.time() * 1000),
+                "nonce": uuid.uuid4().hex[:10],
+                "qidong": 0,
+                "yichang": 0,
+                "tingliu": -1,
+                "shoujiao": -1,
+                "shubiao": {
+                    "yangben": 0,
+                    "zong": 0,
+                    "sujun": 0,
+                    "subiao": 0,
+                    "zhixiandu": 0,
+                },
+                "dianji": 0,
+                "jianpan": {
+                    "anzhu": {"n": 0, "jun": 0, "biao": 0},
+                    "jiange": {"n": 0, "jun": 0, "biao": 0},
+                },
+                "chumo": 0,
+                "zidonghua": {
+                    "webdriver": 0,
+                    "wutu": 0,
+                    "cdc": 0,
+                    "lingchuang": 0,
+                    "jiachrome": 0,
+                    "wuyuyan": 0,
+                },
+            },
+            separators=(",", ":"),
+        )
 
     def _url(self, path: str) -> str:
         return f"{self._base_url}{self._api_prefix}{path}"
@@ -83,7 +129,7 @@ class YdtvClient:
         method: str,
         path: str,
         *,
-        token: str,
+        token: str | None,
         space: str = "geren",
         json_body: dict[str, Any] | None = None,
     ) -> ApiResponse:
@@ -116,4 +162,104 @@ class YdtvClient:
 
     def get_balance(self, token: str, space: str = "geren") -> ApiResponse:
         return self._request("POST", "/user/chaxunyue", token=token, space=space, json_body={})
+
+    def get_captcha(self) -> ApiResponse:
+        return self._request("GET", "/denglu/tuxingyzm/get", token=None)
+
+    def request_phone_code(self, phone: str, captcha_id: str, captcha_answer: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            "/denglu/shoujihao/huoquyanzhengma",
+            token=None,
+            json_body={
+                "手机号": encode_token(phone),
+                "图形验证码ID": captcha_id,
+                "图形验证码答案": captcha_answer,
+            },
+        )
+
+    def login_phone(self, phone: str, code: str, captcha_id: str, captcha_answer: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            "/denglu/shoujihao/denglu",
+            token=None,
+            json_body={
+                "手机号": phone,
+                "验证码": code,
+                "设备类型": "web",
+                "设备标识": self._device_id(),
+                "使用语言": self._language,
+                "图形验证码ID": captcha_id,
+                "图形验证码答案": captcha_answer,
+                "行为包": self._behavior_pack(),
+            },
+        )
+
+    def request_email_code(self, email: str, captcha_id: str, captcha_answer: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            "/denglu/mail/huoquyanzhengma",
+            token=None,
+            json_body={
+                "邮箱": encode_token(email),
+                "图形验证码ID": captcha_id,
+                "图形验证码答案": captcha_answer,
+            },
+        )
+
+    def login_email(self, email: str, code: str, captcha_id: str, captcha_answer: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            "/denglu/mail/denglu",
+            token=None,
+            json_body={
+                "邮箱": email,
+                "验证码": code,
+                "设备类型": "web",
+                "设备标识": self._device_id(),
+                "使用语言": self._language,
+                "图形验证码ID": captcha_id,
+                "图形验证码答案": captcha_answer,
+                "行为包": self._behavior_pack(),
+            },
+        )
+
+    def login_password(self, account: str, password: str, captcha_id: str, captcha_answer: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            "/denglu/mima/denglu",
+            token=None,
+            json_body={
+                "账号": account,
+                "密码": encode_token(password),
+                "设备类型": "web",
+                "设备标识": self._device_id(),
+                "使用语言": self._language,
+                "图形验证码ID": captcha_id,
+                "图形验证码答案": captcha_answer,
+                "行为包": self._behavior_pack(),
+            },
+        )
+
+    def get_wechat_auth_url(self, domain: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            "/denglu/weixin/huoququanurl",
+            token=None,
+            json_body={"当前网站域名": domain},
+        )
+
+    def login_wechat(self, code: str, domain: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            "/denglu/weixin/denglu",
+            token=None,
+            json_body={
+                "code": code,
+                "设备类型": "web",
+                "设备标识": self._device_id(),
+                "使用语言": self._language,
+                "域名": domain,
+            },
+        )
 
