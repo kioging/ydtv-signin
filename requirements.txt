@@ -2,6 +2,7 @@ fastapi==0.143.0
 uvicorn[standard]==0.54.0
 APScheduler==3.11.3
 httpx==0.28.1
+websockets==17.2
 Jinja2==3.1.6
 argon2-cffi==25.1.0
 python-multipart==0.0.32

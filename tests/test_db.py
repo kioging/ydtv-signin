@@ -25,5 +25,5 @@ def test_migrate_advances_existing_schema_version(tmp_path):
     migrate(path)
     with connect(path) as connection:
         version = connection.execute("SELECT MAX(version) AS version FROM schema_migrations").fetchone()["version"]
-    assert version == 5
+    assert version == 6
 

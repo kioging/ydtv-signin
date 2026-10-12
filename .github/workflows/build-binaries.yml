@@ -23,11 +23,11 @@ jobs:
           name: ydtv-signin-windows-x64
           path: release/ydtv-signin-windows-x64.zip
           if-no-files-found: error
-      - name: Upload Windows WeChat helper ZIP
+      - name: Upload Windows WeChat helper
         uses: actions/upload-artifact@v4
         with:
           name: ydtv-wechat-login-windows-x64
-          path: release/ydtv-wechat-login-windows-x64.zip
+          path: release/ydtv-wechat-login-windows-x64.zip*
           if-no-files-found: error
       - name: Upload Windows WeChat helper EXE
         uses: actions/upload-artifact@v4

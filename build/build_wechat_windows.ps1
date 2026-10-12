@@ -23,6 +23,7 @@ Copy-Item "dist\ydtv-wechat-login.exe" $stage
 $downloadDir = Join-Path $root "downloads"
 New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
 Copy-Item "dist\ydtv-wechat-login.exe" (Join-Path $downloadDir "ydtv-wechat-login.exe")
+$exeHash = (Get-FileHash "dist\ydtv-wechat-login.exe" -Algorithm SHA256).Hash.ToLower()
 $readme = @(
     "ydtv.ai WeChat Login Helper",
     "",
@@ -30,11 +31,16 @@ $readme = @(
     "2. Click Start WeChat Login",
     "3. Complete WeChat login in the browser window",
     "4. The full callback URL will be copied to the clipboard automatically",
-    "5. Paste it into Web Panel -> Add Account -> WeChat Login"
+    "5. Paste it into Web Panel -> Add Account -> WeChat Login",
+    "",
+    "SHA256: $exeHash"
 ) -join [Environment]::NewLine
 $readme | Set-Content -Encoding UTF8 (Join-Path $stage "README.txt")
 
 $archive = Join-Path $root "release\ydtv-wechat-login-windows-x64.zip"
 if (Test-Path $archive) { Remove-Item -Force $archive }
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive
+$zipHash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
+"$zipHash  ydtv-wechat-login-windows-x64.zip" |
+    Set-Content -Encoding ASCII "$archive.sha256"
 Write-Host "WeChat login helper created: $archive"

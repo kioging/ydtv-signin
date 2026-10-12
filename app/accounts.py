@@ -73,3 +73,12 @@ def save_accounts(path: Path, accounts: list[Account]) -> None:
         }
         atomic_write_json(path, payload, private=True)
 
+
+def remove_account(path: Path, account_id: str) -> bool:
+    with ACCOUNTS_LOCK:
+        accounts = load_accounts(path)
+        remaining = [account for account in accounts if account.id != account_id]
+        if len(remaining) == len(accounts):
+            return False
+        save_accounts(path, remaining)
+        return True

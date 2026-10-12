@@ -4,6 +4,8 @@ import os
 import sys
 from pathlib import Path
 
+from app.config import AppConfig, load_config
+
 
 def _data_root() -> Path:
     configured = os.environ.get("YDTV_DATA_DIR")
@@ -12,6 +14,20 @@ def _data_root() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent.parent
+
+
+def _ssl_options(config: AppConfig, data_root: Path) -> dict[str, str]:
+    """Return uvicorn TLS options; empty means plain HTTP."""
+    if not (config.web.tls_certfile and config.web.tls_keyfile):
+        return {}
+    options: dict[str, str] = {}
+    for key, value in (
+        ("ssl_certfile", config.web.tls_certfile),
+        ("ssl_keyfile", config.web.tls_keyfile),
+    ):
+        path = Path(value)
+        options[key] = str(path if path.is_absolute() else (data_root / path).resolve())
+    return options
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,7 +41,6 @@ def main(argv: list[str] | None = None) -> int:
 
     import uvicorn
 
-    from app.config import load_config
     from app.main import app
 
     config = load_config(data_root / "config.json")
@@ -35,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
         port=config.web.port,
         log_level=config.logging.level.lower(),
         workers=1,
+        **_ssl_options(config, data_root),
     )
     return 0
 

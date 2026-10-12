@@ -11,33 +11,61 @@ def _days_ago_iso(days: int) -> str:
     return (datetime.utcnow() - timedelta(days=days)).isoformat(timespec="seconds")
 
 
-def summary(database: Path, days: int = 30) -> dict[str, Any]:
+def _account_filter(account_ids: set[str] | None, column: str = "account_id") -> tuple[str, list[str]]:
+    if account_ids is None:
+        return "", []
+    if not account_ids:
+        return " AND 1 = 0", []
+    placeholders = ",".join("?" for _ in account_ids)
+    return f" AND {column} IN ({placeholders})", list(account_ids)
+
+
+def summary(
+    database: Path,
+    days: int = 30,
+    account_ids: set[str] | None = None,
+) -> dict[str, Any]:
     since = _days_ago_iso(days)
+    account_clause, account_values = _account_filter(account_ids)
     with connect(database, readonly=True) as connection:
-        total_runs = connection.execute("SELECT COUNT(*) AS value FROM runs WHERE started_at >= ?", (since,)).fetchone()["value"]
+        total_runs = connection.execute(
+            f"SELECT COUNT(*) AS value FROM runs WHERE started_at >= ?{account_clause}",
+            (since, *account_values),
+        ).fetchone()["value"]
         successful = connection.execute(
-            "SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status = 'success' AND trigger_id NOT LIKE 'keepalive-%'",
-            (since,),
+            f"SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status = 'success' AND trigger_id NOT LIKE 'keepalive-%'{account_clause}",
+            (since, *account_values),
         ).fetchone()["value"]
         already = connection.execute(
-            "SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status = 'already_signed' AND trigger_id NOT LIKE 'keepalive-%'",
-            (since,),
+            f"SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status = 'already_signed' AND trigger_id NOT LIKE 'keepalive-%'{account_clause}",
+            (since, *account_values),
         ).fetchone()["value"]
-        failures = connection.execute("SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status IN ('failed', 'network_error')", (since,)).fetchone()["value"]
-        invalid = connection.execute("SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status = 'token_invalid'", (since,)).fetchone()["value"]
-        reward = connection.execute("SELECT COALESCE(SUM(reward), 0) AS value FROM signins WHERE sign_date >= date(?)", (since,)).fetchone()["value"]
+        failures = connection.execute(
+            f"SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status IN ('failed', 'network_error'){account_clause}",
+            (since, *account_values),
+        ).fetchone()["value"]
+        invalid = connection.execute(
+            f"SELECT COUNT(*) AS value FROM runs WHERE started_at >= ? AND status = 'token_invalid'{account_clause}",
+            (since, *account_values),
+        ).fetchone()["value"]
+        reward = connection.execute(
+            f"SELECT COALESCE(SUM(reward), 0) AS value FROM signins WHERE sign_date >= date(?){account_clause}",
+            (since, *account_values),
+        ).fetchone()["value"]
         signed_days = connection.execute(
-            "SELECT COUNT(DISTINCT sign_date) AS value FROM signins WHERE sign_date >= date(?) AND status IN ('success', 'already_signed')",
-            (since,),
+            f"SELECT COUNT(DISTINCT sign_date) AS value FROM signins WHERE sign_date >= date(?) AND status IN ('success', 'already_signed'){account_clause}",
+            (since, *account_values),
         ).fetchone()["value"]
         latest_balance = connection.execute(
-            """
+            f"""
             SELECT s.account_id, s.balance, s.captured_at
             FROM balance_snapshots s
             JOIN (
                 SELECT account_id, MAX(captured_at) AS latest FROM balance_snapshots GROUP BY account_id
             ) latest_rows ON latest_rows.account_id = s.account_id AND latest_rows.latest = s.captured_at
-            """
+            WHERE 1 = 1{_account_filter(account_ids, 's.account_id')[0]}
+            """,
+            account_values,
         ).fetchall()
     return {
         "days": days,
@@ -65,8 +93,7 @@ def account_summaries(database: Path, days: int = 90) -> list[dict[str, Any]]:
                    SUM(CASE WHEN r.status = 'success' AND r.trigger_id NOT LIKE 'keepalive-%' THEN 1 ELSE 0 END) AS successful,
                    SUM(CASE WHEN r.status = 'already_signed' AND r.trigger_id NOT LIKE 'keepalive-%' THEN 1 ELSE 0 END) AS already_signed,
                    SUM(CASE WHEN r.status IN ('failed', 'network_error') THEN 1 ELSE 0 END) AS failed,
-                   SUM(CASE WHEN r.status = 'token_invalid' THEN 1 ELSE 0 END) AS token_invalid,
-                   COALESCE(SUM(r.reward), 0) AS reward_total
+                   SUM(CASE WHEN r.status = 'token_invalid' THEN 1 ELSE 0 END) AS token_invalid
             FROM runs r
             WHERE r.started_at >= ?
             GROUP BY r.account_id
@@ -93,6 +120,14 @@ def account_summaries(database: Path, days: int = 90) -> list[dict[str, Any]]:
                 "SELECT captured_at, balance FROM balance_snapshots WHERE account_id = ? AND captured_at >= ? ORDER BY captured_at",
                 (account_id, since),
             ).fetchall()
+            reward_total = connection.execute(
+                """
+                SELECT COALESCE(SUM(reward), 0) AS value
+                FROM signins
+                WHERE account_id = ? AND sign_date >= date(?)
+                """,
+                (account_id, since),
+            ).fetchone()["value"]
             results.append(
                 {
                     "account_id": account_id,
@@ -110,7 +145,7 @@ def account_summaries(database: Path, days: int = 90) -> list[dict[str, Any]]:
                     ).fetchone()["value"],
                     "failed": row["failed"],
                     "token_invalid": row["token_invalid"],
-                    "reward_total": row["reward_total"],
+                    "reward_total": reward_total,
                     "latest_balance": balance_row["balance"] if balance_row else None,
                     "calendar": [dict(item) for item in calendar],
                     "balance_history": [dict(item) for item in balances],

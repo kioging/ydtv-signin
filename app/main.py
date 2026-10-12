@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import httpx
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
@@ -23,15 +24,22 @@ from .auth import (
     LoginRateLimiter,
     create_session_cookie,
     csrf_token,
+    is_secure_request,
     is_authenticated,
     validate_csrf_token,
     verify_password,
 )
 from .config import hash_password, load_config, set_web_password, update_scheduler_settings
-from .accounts import load_accounts
+from .accounts import load_accounts, remove_account
 from .account_sync import sync_account
 from .balance_service import record_balance_snapshot
-from .db import migrate
+from .db import (
+    is_account_deleted,
+    mark_account_deleted,
+    migrate,
+    reconcile_account_metadata,
+    transaction,
+)
 from .log_store import install_database_logging, prune_runtime_logs
 from .queries import account_summaries, runs, runtime_logs, summary
 from .runner import SigninRunner
@@ -57,6 +65,7 @@ WECHAT_HELPER_FALLBACK_PATH = DATA_ROOT / "downloads" / "ydtv-wechat-login.exe"
 
 config = load_config(CONFIG_PATH)
 migrate(DATABASE_PATH)
+reconcile_account_metadata(DATABASE_PATH, {account.id for account in load_accounts(ACCOUNTS_PATH)})
 prune_runtime_logs(DATABASE_PATH, config.logging.retention_days)
 install_database_logging(DATABASE_PATH, getattr(logging, config.logging.level, logging.INFO))
 
@@ -184,14 +193,12 @@ async def login(request: Request, response: Response, password: Annotated[str, F
     rate_limiter.reset(client_ip)
     signed = create_session_cookie(config.web.session_secret, config.web.session_ttl_hours)
     redirect = RedirectResponse("/", status_code=303)
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
-    secure_cookie = forwarded_proto == "https" or request.url.scheme == "https"
     redirect.set_cookie(
         COOKIE_NAME,
         signed,
         max_age=config.web.session_ttl_hours * 3600,
         httponly=True,
-        secure=secure_cookie,
+        secure=is_secure_request(request),
         samesite="lax",
     )
     return redirect
@@ -206,8 +213,8 @@ async def logout():
 
 @app.get("/")
 async def dashboard(request: Request, _: None = Depends(require_auth)):
-    data = summary(DATABASE_PATH, 30)
     names = {account.id: account.label for account in load_accounts(ACCOUNTS_PATH)}
+    data = summary(DATABASE_PATH, 30, set(names))
     data["latest_balances_display"] = []
     for account_id, balance_data in data["latest_balances"].items():
         data["latest_balances_display"].append(
@@ -364,6 +371,8 @@ async def accounts_page(request: Request, _: None = Depends(require_auth)):
     data = account_summaries(DATABASE_PATH, 90)
     accounts = load_accounts(ACCOUNTS_PATH)
     account_meta = {account.id: account.label for account in accounts}
+    current_ids = set(account_meta)
+    data = [item for item in data if item["account_id"] in current_ids]
     account_meta_avatar = {account.id: account.avatar_url for account in accounts}
     account_meta_expiry = {account.id: token_expiry_text(account.token_expires_at) for account in accounts}
     known_ids = {item["account_id"] for item in data}
@@ -409,6 +418,14 @@ def response_error(response, fallback: str = "登录请求失败") -> str:
     return str(response.payload.get("msg") or response.payload.get("message") or fallback)
 
 
+def call_upstream(callback, fallback: str):
+    try:
+        return callback()
+    except httpx.TransportError as error:
+        logger.warning("%s: %s", fallback, error)
+        raise HTTPException(status_code=502, detail=f"{fallback}：上游网络请求失败") from error
+
+
 def require_login_token(response, fallback: str = "登录失败") -> str:
     if response.status_code != 200 or response.payload.get("code") != 200:
         raise HTTPException(status_code=400, detail=response_error(response, fallback))
@@ -433,7 +450,7 @@ def save_logged_in_account(client: YdtvClient, token: str) -> dict:
 
 @app.get("/dashboard/api/account-login/captcha")
 async def account_login_captcha(_: None = Depends(require_auth)):
-    response = login_client().get_captcha()
+    response = call_upstream(lambda: login_client().get_captcha(), "验证码获取失败")
     if response.status_code != 200 or response.payload.get("code") != 200:
         raise HTTPException(status_code=502, detail=response_error(response, "验证码获取失败"))
     data = response.payload.get("data") or {}
@@ -456,11 +473,17 @@ async def account_login_send_code(
     if payload.type == "phone":
         if not re.fullmatch(r"1[3-9]\d{9}", payload.account):
             raise HTTPException(status_code=400, detail="手机号码格式不正确")
-        response = client.request_phone_code(payload.account, payload.captcha_id, payload.captcha_answer)
+        response = call_upstream(
+            lambda: client.request_phone_code(payload.account, payload.captcha_id, payload.captcha_answer),
+            "验证码发送失败",
+        )
     else:
         if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", payload.account):
             raise HTTPException(status_code=400, detail="邮箱格式不正确")
-        response = client.request_email_code(payload.account, payload.captcha_id, payload.captcha_answer)
+        response = call_upstream(
+            lambda: client.request_email_code(payload.account, payload.captcha_id, payload.captcha_answer),
+            "验证码发送失败",
+        )
     if response.status_code != 200 or response.payload.get("code") != 200:
         raise HTTPException(status_code=400, detail=response_error(response, "验证码发送失败"))
     logger.info("User action: send login code, type=%s", payload.type)
@@ -478,33 +501,47 @@ async def account_login(
     if payload.type == "password":
         if not payload.password:
             raise HTTPException(status_code=400, detail="请输入密码")
-        response = client.login_password(
-            payload.account,
-            payload.password,
-            payload.captcha_id,
-            payload.captcha_answer,
+        response = call_upstream(
+            lambda: client.login_password(
+                payload.account,
+                payload.password,
+                payload.captcha_id,
+                payload.captcha_answer,
+            ),
+            "密码登录失败",
         )
     elif payload.type == "phone":
         if not payload.code:
             raise HTTPException(status_code=400, detail="请输入短信验证码")
-        response = client.login_phone(
-            payload.account,
-            payload.code,
-            payload.captcha_id,
-            payload.captcha_answer,
+        response = call_upstream(
+            lambda: client.login_phone(
+                payload.account,
+                payload.code,
+                payload.captcha_id,
+                payload.captcha_answer,
+            ),
+            "手机登录失败",
         )
     else:
         if not payload.code:
             raise HTTPException(status_code=400, detail="请输入邮箱验证码")
-        response = client.login_email(
-            payload.account,
-            payload.code,
-            payload.captcha_id,
-            payload.captcha_answer,
+        response = call_upstream(
+            lambda: client.login_email(
+                payload.account,
+                payload.code,
+                payload.captcha_id,
+                payload.captcha_answer,
+            ),
+            "邮箱登录失败",
         )
     token = require_login_token(response)
     logger.info("User action: account login, type=%s", payload.type)
-    return JSONResponse({"ok": True, **save_logged_in_account(client, token)})
+    return JSONResponse(
+        {
+            "ok": True,
+            **call_upstream(lambda: save_logged_in_account(client, token), "账号资料同步失败"),
+        }
+    )
 
 
 @app.post("/dashboard/api/account-login/wechat/callback")
@@ -522,15 +559,21 @@ async def account_login_wechat_callback(
         raise HTTPException(status_code=400, detail="未从回调地址中找到 code")
     domain = urlparse(config.site.base_url).hostname or "ydtv.ai"
     client = login_client()
-    response = client.login_wechat(code, domain)
+    response = call_upstream(lambda: client.login_wechat(code, domain), "微信登录失败")
     token = require_login_token(response, "微信登录失败")
     logger.info("User action: complete WeChat account login")
-    return JSONResponse({"ok": True, **save_logged_in_account(client, token)})
+    return JSONResponse(
+        {
+            "ok": True,
+            **call_upstream(lambda: save_logged_in_account(client, token), "账号资料同步失败"),
+        }
+    )
 
 
 @app.get("/dashboard/api/summary")
 async def api_summary(days: int = 30, _: None = Depends(require_auth)):
-    return JSONResponse(summary(DATABASE_PATH, days))
+    current_ids = {account.id for account in load_accounts(ACCOUNTS_PATH)}
+    return JSONResponse(summary(DATABASE_PATH, days, current_ids))
 
 
 @app.post("/dashboard/api/accounts/{account_id}/balance/refresh")
@@ -574,9 +617,35 @@ async def refresh_balance(
     )
 
 
+@app.post("/dashboard/api/accounts/{account_id}/delete")
+async def delete_account(
+    account_id: str,
+    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
+    _: None = Depends(require_auth),
+):
+    require_csrf(csrf_header)
+    account = next((item for item in load_accounts(ACCOUNTS_PATH) if item.id == account_id), None)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    mark_account_deleted(DATABASE_PATH, account_id)
+    if not remove_account(ACCOUNTS_PATH, account_id):
+        raise HTTPException(status_code=404, detail="Account not found")
+    with transaction(DATABASE_PATH) as connection:
+        connection.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
+    logger.info("User action: delete account, account_id=%s", account_id)
+    return JSONResponse({"ok": True})
+
+
 @app.get("/dashboard/api/accounts")
 async def api_accounts(_: None = Depends(require_auth)):
-    return JSONResponse(account_summaries(DATABASE_PATH, 90))
+    current_ids = {account.id for account in load_accounts(ACCOUNTS_PATH)}
+    return JSONResponse(
+        [
+            item
+            for item in account_summaries(DATABASE_PATH, 90)
+            if item["account_id"] in current_ids
+        ]
+    )
 
 
 @app.get("/dashboard/api/runs")

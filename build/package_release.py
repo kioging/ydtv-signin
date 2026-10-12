@@ -31,13 +31,32 @@ def main() -> int:
     parser.add_argument("--dist", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--platform", required=True, choices=["windows", "linux"])
-    parser.add_argument("--helper-exe", help="Optional Windows WeChat helper executable")
+    parser.add_argument("--helper-exe", help="Windows WeChat helper executable")
+    parser.add_argument(
+        "--allow-missing-helper",
+        action="store_true",
+        help="Build a package without the Windows WeChat helper (incomplete; local testing only)",
+    )
     args = parser.parse_args()
 
     dist = Path(args.dist).resolve()
     output = Path(args.output).resolve()
     if not (dist / "ydtv-signin").exists() and not (dist / "ydtv-signin.exe").exists():
         raise FileNotFoundError(f"Build output not found: {dist}")
+
+    helper: Path | None = None
+    if args.helper_exe:
+        helper = Path(args.helper_exe).resolve()
+        if not helper.exists():
+            raise FileNotFoundError(f"WeChat helper not found: {helper}")
+        with helper.open("rb") as handle:
+            if handle.read(2) != b"MZ":
+                raise ValueError(f"WeChat helper is not a Windows executable: {helper}")
+    elif not args.allow_missing_helper:
+        raise SystemExit(
+            "--helper-exe is required: every deployment package must ship 客户微信登录助手.exe "
+            "(pass --allow-missing-helper to build an incomplete package for local testing)"
+        )
 
     stage = output / f"ydtv-signin-{args.platform}"
     if stage.exists():
@@ -47,14 +66,10 @@ def main() -> int:
     (stage / "logs").mkdir(exist_ok=True)
     (stage / "accounts.json").write_text('{\n  "accounts": []\n}\n', encoding="utf-8")
     (stage / "README-DEPLOY.txt").write_text(DEPLOY_README, encoding="utf-8")
-    if args.helper_exe:
-        helper = Path(args.helper_exe).resolve()
-        if not helper.exists():
-            raise FileNotFoundError(f"WeChat helper not found: {helper}")
+    if helper is not None:
         downloads = stage / "downloads"
         downloads.mkdir(exist_ok=True)
         shutil.copy2(helper, downloads / "客户微信登录助手.exe")
-
     if args.platform == "windows":
         (stage / "start.bat").write_text(
             '@echo off\r\ncd /d "%~dp0"\r\nydtv-signin.exe\r\n',

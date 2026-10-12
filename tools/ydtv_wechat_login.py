@@ -14,6 +14,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
+from websockets.sync.client import connect as websocket_connect
+
 
 APP_TITLE = "ydtv.ai 微信登录助手"
 AUTH_STATE_URL = "https://ydtv.ai/houduan/denglu/weixin/huoququanurl"
@@ -112,6 +114,18 @@ def get_page_urls(port: int) -> list[str]:
         return []
 
 
+def get_page_targets(port: int) -> list[dict]:
+    try:
+        with urlopen(f"http://127.0.0.1:{port}/json/list", timeout=2) as response:
+            return [
+                item
+                for item in json.loads(response.read().decode("utf-8"))
+                if item.get("type") == "page"
+            ]
+    except Exception:
+        return []
+
+
 def extract_callback(url: str) -> str:
     parsed = urlparse(url)
     if "weixin-callback" not in parsed.path and "wechat-callback" not in parsed.path:
@@ -132,6 +146,76 @@ def close_process_tree(process: subprocess.Popen) -> None:
         )
     else:
         process.terminate()
+
+
+def callback_from_cdp_message(message: str) -> str:
+    try:
+        payload = json.loads(message)
+    except ValueError:
+        return ""
+    method = payload.get("method")
+    params = payload.get("params") or {}
+    if method == "Page.frameNavigated":
+        return extract_callback(str((params.get("frame") or {}).get("url") or ""))
+    if method == "Network.requestWillBeSent":
+        return extract_callback(str((params.get("request") or {}).get("url") or ""))
+    return ""
+
+
+def capture_callback(port: int, timeout: float = 600) -> str:
+    deadline = time.time() + timeout
+    active: dict[str, object] = {}
+    retry_at: dict[str, float] = {}
+    commands = [
+        json.dumps({"id": 1, "method": "Page.enable"}),
+        json.dumps({"id": 2, "method": "Network.enable"}),
+    ]
+    try:
+        while time.time() < deadline:
+            for url in get_page_urls(port):
+                callback = extract_callback(url)
+                if callback:
+                    return callback
+
+            now = time.time()
+            for target in get_page_targets(port):
+                ws_url = str(target.get("webSocketDebuggerUrl") or "")
+                if not ws_url or ws_url in active or now < retry_at.get(ws_url, 0):
+                    continue
+                try:
+                    connection = websocket_connect(
+                        ws_url,
+                        open_timeout=1,
+                        close_timeout=1,
+                        proxy=None,
+                    )
+                    for command in commands:
+                        connection.send(command)
+                except Exception:
+                    retry_at[ws_url] = now + 2
+                    continue
+                active[ws_url] = connection
+
+            for ws_url, connection in list(active.items()):
+                try:
+                    message = connection.recv(timeout=0.2)
+                except TimeoutError:
+                    continue
+                except Exception:
+                    active.pop(ws_url, None)
+                    retry_at[ws_url] = time.time() + 2
+                    continue
+                callback = callback_from_cdp_message(message)
+                if callback:
+                    return callback
+            time.sleep(0.05)
+        return ""
+    finally:
+        for connection in active.values():
+            try:
+                connection.close()
+            except Exception:
+                pass
 
 
 class HelperApp:
@@ -231,16 +315,7 @@ class HelperApp:
             )
             self.root.after(0, self.set_status, "请在新窗口中完成微信扫码登录…")
             wait_for_debug_port(port)
-            deadline = time.time() + 600
-            callback_url = ""
-            while time.time() < deadline:
-                for url in get_page_urls(port):
-                    callback_url = extract_callback(url)
-                    if callback_url:
-                        break
-                if callback_url:
-                    break
-                time.sleep(0.1)
+            callback_url = capture_callback(port)
             if not callback_url:
                 raise TimeoutError("等待微信登录超时")
             self.root.after(0, self.set_callback, callback_url)

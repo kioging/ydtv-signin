@@ -38,6 +38,8 @@ class WebConfig:
     password_hash: str = ""
     session_secret: str = ""
     session_ttl_hours: int = 12
+    tls_certfile: str = ""
+    tls_keyfile: str = ""
 
 
 @dataclass(frozen=True)
@@ -78,6 +80,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "password_hash": "",
         "session_secret": "",
         "session_ttl_hours": 12,
+        "tls_certfile": "",
+        "tls_keyfile": "",
     },
     "logging": {"level": "INFO", "retention_days": 180},
 }
@@ -144,6 +148,10 @@ def load_config(path: Path, *, create: bool = True) -> AppConfig:
     hour, minute = map(int, scheduler_raw["daily_time"].split(":", 1))
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ValueError("scheduler.daily_time must be a valid HH:MM time")
+    tls_certfile = str(web_raw["tls_certfile"] or "").strip()
+    tls_keyfile = str(web_raw["tls_keyfile"] or "").strip()
+    if bool(tls_certfile) != bool(tls_keyfile):
+        raise ValueError("web.tls_certfile and web.tls_keyfile must be set together")
 
     return AppConfig(
         site=SiteConfig(
@@ -167,6 +175,8 @@ def load_config(path: Path, *, create: bool = True) -> AppConfig:
             password_hash=str(web_raw["password_hash"]),
             session_secret=str(web_raw["session_secret"]),
             session_ttl_hours=int(web_raw["session_ttl_hours"]),
+            tls_certfile=tls_certfile,
+            tls_keyfile=tls_keyfile,
         ),
         logging=LoggingConfig(
             level=str(logging_raw["level"]).upper(),

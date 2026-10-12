@@ -13,9 +13,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .accounts import Account
-from .account_sync import sync_account
+from .account_sync import AccountNotFoundError, sync_account
 from .balance_service import record_balance_snapshot
-from .db import transaction
+from .db import is_account_deleted, transaction
 from .ydtv import ApiResponse, YdtvClient
 
 
@@ -155,7 +155,10 @@ class SigninRunner:
                 self.client,
                 token,
                 verification_payload=verification_payload,
+                allow_create=False,
             )
+        except AccountNotFoundError:
+            raise
         except Exception:
             logger.warning("Could not update profile for %s", account.id, exc_info=True)
             return None
@@ -202,6 +205,10 @@ class SigninRunner:
     def run_account(self, account: Account, trigger_id: str, attempt: int = 0) -> AccountResult:
         started_at = self._utc_timestamp()
         try:
+            if is_account_deleted(self.database, account.id):
+                result = AccountResult(account.id, "deleted", "Account was deleted")
+                self._record_run(trigger_id, account, started_at, result, attempt)
+                return result
             verification = self.client.verify_token(account.token, account.space)
             if self._is_auth_failure(verification):
                 result = AccountResult(account.id, "token_invalid", "Token is invalid; sign in again and update accounts.json")
@@ -216,7 +223,12 @@ class SigninRunner:
                 self._record_run(trigger_id, account, started_at, result, attempt)
                 return result
 
-            sync_result = self._sync_profile(account, account.token, verification.payload)
+            try:
+                sync_result = self._sync_profile(account, account.token, verification.payload)
+            except AccountNotFoundError:
+                result = AccountResult(account.id, "deleted", "Account was deleted during execution")
+                self._record_run(trigger_id, account, started_at, result, attempt)
+                return result
             if sync_result is not None:
                 account = replace(
                     account,
@@ -324,6 +336,11 @@ class SigninRunner:
         for account in accounts:
             started_at = self._utc_timestamp()
             try:
+                if is_account_deleted(self.database, account.id):
+                    result = AccountResult(account.id, "deleted", "Account was deleted")
+                    self._record_run(trigger_id, account, started_at, result, attempt=0)
+                    results.append(result)
+                    continue
                 response = self.client.verify_token(account.token, account.space)
                 if self._is_auth_failure(response):
                     result = AccountResult(account.id, "token_invalid", "Token is invalid; authorize this account again")

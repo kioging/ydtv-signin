@@ -5,7 +5,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from .accounts import ACCOUNTS_LOCK, Account, load_accounts, save_accounts
-from .db import transaction
+from .db import clear_account_tombstone, transaction
 from .ydtv import YdtvClient
 
 
@@ -21,6 +21,10 @@ class SyncResult:
     user_id: str = ""
 
 
+class AccountNotFoundError(RuntimeError):
+    pass
+
+
 def sync_account(
     accounts_path: Path,
     database_path: Path,
@@ -28,6 +32,7 @@ def sync_account(
     client: YdtvClient,
     token: str,
     verification_payload: dict | None = None,
+    allow_create: bool = True,
 ) -> SyncResult:
     response = client.get_user_info(token)
     if response.status_code != 200 or response.payload.get("code") not in (None, 200):
@@ -65,6 +70,8 @@ def sync_account(
             None,
         )
         created = target_index is None
+        if created and not allow_create:
+            raise AccountNotFoundError(f"Account {account_id} was removed")
         if target_index is None:
             target_id = account_id
             accounts.append(
@@ -100,6 +107,8 @@ def sync_account(
             seen_identities.add(identity)
             unique_accounts.append(account)
         save_accounts(accounts_path, unique_accounts)
+
+    clear_account_tombstone(database_path, target_id)
 
     with transaction(database_path) as connection:
         timestamp = connection.execute("SELECT datetime('now') || 'Z' AS value").fetchone()["value"]

@@ -222,6 +222,9 @@ th { color: var(--muted); background: #fafbfc; }
 .status-token_invalid { color: #92400e; background: #fef3c7; }
 .account-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 16px; }
 .account-card header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.account-footer { display: flex; justify-content: flex-end; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.action-button.danger { background: #b42318; color: #fff; }
+.action-button.danger:hover { background: #8f1d14; }
 .balance { color: var(--accent); font-weight: 700; }
 .account-id { display: block; margin-top: -10px; color: var(--muted); font-size: 12px; }
 .account-title { display: flex; align-items: center; gap: 10px; }

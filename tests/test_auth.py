@@ -1,4 +1,12 @@
-from app.auth import LoginRateLimiter, create_session_cookie, validate_session_cookie, verify_password
+from starlette.requests import Request
+
+from app.auth import (
+    LoginRateLimiter,
+    create_session_cookie,
+    is_secure_request,
+    validate_session_cookie,
+    verify_password,
+)
 from app.config import hash_password
 
 
@@ -17,4 +25,30 @@ def test_rate_limiter():
     assert not limiter.is_blocked("ip")
     limiter.record_failure("ip")
     assert limiter.is_blocked("ip")
+
+
+def _request(scheme: str = "http", forwarded_proto: str | None = None) -> Request:
+    headers = []
+    if forwarded_proto is not None:
+        headers.append((b"x-forwarded-proto", forwarded_proto.encode("utf-8")))
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/login",
+            "scheme": scheme,
+            "headers": headers,
+            "client": ("203.0.113.5", 12345),
+            "server": ("panel.example.com", 443 if scheme == "https" else 80),
+            "query_string": b"",
+        }
+    )
+
+
+def test_secure_request_detection():
+    assert is_secure_request(_request("http")) is False
+    assert is_secure_request(_request("https")) is True
+    assert is_secure_request(_request("http", "https")) is True
+    assert is_secure_request(_request("http", "https, http")) is True
+    assert is_secure_request(_request("http", "http")) is False
 

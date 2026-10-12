@@ -100,6 +100,9 @@
           <p class="empty">暂无签到记录。</p>
         {% endfor %}
       </div>
+      <div class="account-footer">
+        <button class="action-button danger delete-account" data-account-id="{{ account.account_id }}" type="button">删除账号</button>
+      </div>
     </article>
   {% else %}
     <p class="empty">暂无账号数据。</p>

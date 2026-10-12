@@ -201,3 +201,24 @@ document.querySelectorAll(".refresh-account-balance").forEach((button) => {
     }
   });
 });
+
+document.querySelectorAll(".delete-account").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const accountId = button.dataset.accountId;
+    const confirmed = window.confirm(`确定删除账号 ${accountId}？历史记录会保留。`);
+    if (!confirmed) return;
+    button.disabled = true;
+    button.textContent = "删除中";
+    try {
+      await apiFetch(`/dashboard/api/accounts/${encodeURIComponent(accountId)}/delete`, {
+        method: "POST",
+        body: "{}",
+      });
+      window.location.reload();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = "删除失败";
+      window.alert(error.message);
+    }
+  });
+});

@@ -35,7 +35,7 @@ python3.11 -m venv .venv
 - 密码登录：输入账号、密码和图形验证码
 - 手机登录：输入手机号、图形验证码和短信验证码
 - 邮箱登录：输入邮箱、图形验证码和邮箱验证码
-- 微信登录：面板打开官方微信授权窗口，完成登录后将最终回调地址粘贴回面板
+- 微信登录：客户运行独立 Windows 登录助手，扫码后将回调地址粘贴回面板
 
 密码、手机、邮箱登录不依赖浏览器自动化。微信登录也仅使用普通浏览器完成官方 OAuth，不需要 Playwright 或 Chromium。
 
@@ -82,11 +82,37 @@ ydtv-wechat-login.exe
 6. 助手捕获完整回调地址并自动复制到剪贴板
 7. 用户回到 Web 面板，在“添加账号 -> 微信登录”中粘贴回调地址并导入
 
-服务器部署包会自动在 `downloads/` 目录中携带 `客户微信登录助手.exe`。该下载接口需要先登录 Web 面板。
+客户端助手运行在客户电脑上，不读取服务器文件。服务器部署包会在 `downloads/` 中携带该 EXE，并通过需要登录的下载接口提供。
 
 ## 公网部署
 
-服务默认监听 `0.0.0.0`，可通过本机和局域网地址访问。公网访问请使用 Nginx/Caddy 反向代理并启用 HTTPS，否则 Cookie 的 `Secure` 标记会导致登录状态无法保存。
+服务默认监听 `0.0.0.0:8848`（HTTP），可通过本机和局域网地址访问。公网访问推荐用 Nginx/Caddy 终止 TLS，示例配置见：
+
+- `deploy/nginx-https.conf.example`
+- `deploy/Caddyfile.example`
+
+登录 Cookie 的 `Secure` 标记是自适应的：通过 HTTPS 访问（或反向代理带上 `X-Forwarded-Proto: https`）时自动加 `Secure`，直接内网 HTTP 访问时不加，因此局域网和 HTTPS 部署都能正常保持登录状态。公网仍必须使用 HTTPS，否则密码和会话都会明文传输。
+
+### 方式一：反向代理（推荐）
+
+1. 修改 `config.json`，把 `web.host` 改成 `127.0.0.1`，避免 8848 端口直接暴露公网
+2. 按 `deploy/nginx-https.conf.example` 或 `deploy/Caddyfile.example` 配置反向代理并启用证书
+3. 如果反向代理和面板不在同一台机器，启动时设置 `FORWARDED_ALLOW_IPS`（uvicorn 默认只信任来自 `127.0.0.1` 的转发头）
+
+### 方式二：服务直接启用 HTTPS
+
+如果不想额外跑反向代理，可以在 `config.json` 的 `web` 段直接指定证书：
+
+```json
+"web": {
+  "host": "0.0.0.0",
+  "port": 8848,
+  "tls_certfile": "/etc/letsencrypt/live/your-domain.example.com/fullchain.pem",
+  "tls_keyfile": "/etc/letsencrypt/live/your-domain.example.com/privkey.pem"
+}
+```
+
+两个字段必须同时设置，留空表示继续用 HTTP；相对路径按程序所在目录解析。配置后访问 `https://your-domain.example.com:8848`。
 
 ## 二进制部署包
 
@@ -102,6 +128,8 @@ Linux 原生构建：
 ```bash
 bash build/build_linux.sh
 ```
+
+Linux 部署包同样必须自带 Windows 的 `客户微信登录助手.exe`（客户下载后在自己电脑上运行）。构建脚本会依次从 `YDTV_WECHAT_HELPER_EXE`、`downloads/客户微信登录助手.exe`、`downloads/ydtv-wechat-login.exe`、`dist/ydtv-wechat-login.exe` 查找，找不到就直接报错；只有本地测试才用 `YDTV_ALLOW_MISSING_HELPER=1` 跳过。CI 会先构建 Windows 助手，再把 EXE 传给 Linux 打包任务。
 
 构建结果位于：
 

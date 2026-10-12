@@ -77,6 +77,11 @@ def validate_csrf_token(secret: str, token: str) -> bool:
     return bool(secret and token and hmac.compare_digest(token, csrf_token(secret)))
 
 
+def is_secure_request(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return forwarded_proto == "https" or request.url.scheme == "https"
+
+
 async def is_authenticated(request: Request, secret: str) -> bool:
     cookie = request.cookies.get(COOKIE_NAME)
     return bool(cookie and secret and validate_session_cookie(secret, cookie))

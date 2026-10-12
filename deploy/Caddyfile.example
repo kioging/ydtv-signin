@@ -1,0 +1,24 @@
+# ydtv.ai 签到面板：Caddy HTTPS 反向代理示例
+#
+# 使用步骤：
+# 1. 把 your-domain.example.com 替换成你的域名
+# 2. 把本文件放到服务器（例如 /etc/caddy/Caddyfile），Caddy 会自动申请并续期证书
+# 3. 建议把 config.json 里的 web.host 改为 127.0.0.1
+# 4. 重载 Caddy: caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# Caddy 会自动带上 X-Forwarded-Proto，面板会自动为会话 Cookie 加上 Secure 标记。
+
+your-domain.example.com {
+    encode gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "same-origin"
+    }
+
+    reverse_proxy 127.0.0.1:8848 {
+        header_up X-Real-IP {remote_host}
+    }
+}

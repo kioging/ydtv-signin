@@ -49,19 +49,21 @@ class SchedulerService:
         self.config = config
         if not self.scheduler.running:
             self.scheduler.start()
+        if not config.scheduler.enabled:
+            for job in self.scheduler.get_jobs():
+                job.remove()
+            logger.info("Scheduler disabled by settings update")
+            return
         for job in self.scheduler.get_jobs():
             if job.id.startswith("signin-retry-"):
                 continue
             job.remove()
-        if config.scheduler.enabled:
-            self._schedule_daily()
-            logger.info(
-                "Scheduler reconfigured: daily=%s, keepalive=%sh",
-                config.scheduler.daily_time,
-                config.scheduler.keepalive_interval_hours,
-            )
-        else:
-            logger.info("Scheduler disabled by settings update")
+        self._schedule_daily()
+        logger.info(
+            "Scheduler reconfigured: daily=%s, keepalive=%sh",
+            config.scheduler.daily_time,
+            config.scheduler.keepalive_interval_hours,
+        )
 
     def _schedule_daily(self) -> None:
         hour, minute = map(int, self.config.scheduler.daily_time.split(":", 1))

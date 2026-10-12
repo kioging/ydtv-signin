@@ -1,8 +1,10 @@
 from pathlib import Path
 
-from app.account_sync import sync_account
+import pytest
+
+from app.account_sync import AccountNotFoundError, sync_account
 from app.accounts import Account, load_accounts, save_accounts
-from app.db import migrate
+from app.db import is_account_deleted, mark_account_deleted, migrate
 from app.ydtv import ApiResponse
 
 
@@ -112,3 +114,41 @@ def test_rotated_token_is_saved(tmp_path):
     )
     assert result.token == "rotated-token"
     assert load_accounts(accounts_path)[0].token == "rotated-token"
+
+
+def test_allow_create_false_does_not_resurrect_deleted_account(tmp_path):
+    accounts_path = tmp_path / "accounts.json"
+    database_path = tmp_path / "signin.db"
+    migrate(database_path)
+    save_accounts(accounts_path, [])
+
+    with pytest.raises(AccountNotFoundError):
+        sync_account(
+            accounts_path,
+            database_path,
+            "deleted-account",
+            StubClient("100"),
+            "token",
+            allow_create=False,
+        )
+    assert load_accounts(accounts_path) == []
+
+
+def test_readd_clears_deleted_account_tombstone(tmp_path):
+    accounts_path = tmp_path / "accounts.json"
+    database_path = tmp_path / "signin.db"
+    migrate(database_path)
+    save_accounts(accounts_path, [])
+    mark_account_deleted(database_path, "main")
+    assert is_account_deleted(database_path, "main") is True
+
+    sync_account(
+        accounts_path,
+        database_path,
+        "main",
+        StubClient("100"),
+        "token",
+    )
+
+    assert is_account_deleted(database_path, "main") is False
+    assert [account.id for account in load_accounts(accounts_path)] == ["main"]

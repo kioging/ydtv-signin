@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterator
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def connect(path: Path, *, readonly: bool = False) -> sqlite3.Connection:
@@ -88,6 +88,10 @@ def migrate(path: Path) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_runtime_logs_created ON runtime_logs(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_runtime_logs_category ON runtime_logs(category, created_at DESC);
+            CREATE TABLE IF NOT EXISTS deleted_accounts (
+                account_id TEXT PRIMARY KEY,
+                deleted_at TEXT NOT NULL
+            );
             """
         )
         current_version = connection.execute("SELECT MAX(version) AS version FROM schema_migrations").fetchone()["version"]
@@ -125,6 +129,37 @@ def acquire_job_lock(path: Path, name: str, owner: str, expires_at: str) -> bool
 def release_job_lock(path: Path, name: str, owner: str) -> None:
     with transaction(path) as connection:
         connection.execute("DELETE FROM job_locks WHERE name = ? AND owner = ?", (name, owner))
+
+
+def mark_account_deleted(path: Path, account_id: str) -> None:
+    timestamp = datetime.utcnow().isoformat(timespec="seconds")
+    with transaction(path) as connection:
+        connection.execute(
+            "INSERT OR REPLACE INTO deleted_accounts(account_id, deleted_at) VALUES (?, ?)",
+            (account_id, timestamp),
+        )
+
+
+def clear_account_tombstone(path: Path, account_id: str) -> None:
+    with transaction(path) as connection:
+        connection.execute("DELETE FROM deleted_accounts WHERE account_id = ?", (account_id,))
+
+
+def is_account_deleted(path: Path, account_id: str) -> bool:
+    with connect(path, readonly=True) as connection:
+        row = connection.execute(
+            "SELECT 1 FROM deleted_accounts WHERE account_id = ?",
+            (account_id,),
+        ).fetchone()
+        return row is not None
+
+
+def reconcile_account_metadata(database_path: Path, configured_account_ids: set[str]) -> None:
+    with transaction(database_path) as connection:
+        rows = connection.execute("SELECT account_id FROM accounts").fetchall()
+        stale_ids = [row["account_id"] for row in rows if row["account_id"] not in configured_account_ids]
+        for account_id in stale_ids:
+            connection.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
 
 
 @contextmanager
