@@ -61,13 +61,20 @@ jobs:
           path: downloads
       # 在 manylinux2014（CentOS 7 基础，glibc 2.17）里构建，
       # 让产物可以运行在 CentOS 7 / Alibaba Cloud Linux 2/3 等老系统上。
+      # 镜像自带的 CPython 是静态库，PyInstaller 需要共享库，所以用 uv 装一份
+      # python-build-standalone 的 CPython 3.11（同为 glibc 2.17 基线，带 libpython）。
       - name: Build Linux server package (manylinux2014)
         run: |
           docker run --rm -v "$PWD:/work" -w /work \
-            -e PYTHON_BIN=/opt/python/cp311-cp311/bin/python3.11 \
             -e YDTV_WECHAT_HELPER_EXE=downloads/ydtv-wechat-login.exe \
             quay.io/pypa/manylinux2014_x86_64 \
-            bash build/build_linux.sh
+            bash -lc '
+              set -euo pipefail
+              curl -LsSf https://astral.sh/uv/install.sh | sh
+              export PATH="$HOME/.local/bin:$PATH"
+              uv python install 3.11
+              PYTHON_BIN="$(uv python find 3.11)" bash build/build_linux.sh
+            '
       - name: Report bundled glibc requirement
         run: |
           objdump -T dist/ydtv-signin/_internal/libpython3.11.so.1.0 \
