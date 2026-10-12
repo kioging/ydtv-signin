@@ -133,6 +133,8 @@ Linux 原生构建：
 bash build/build_linux.sh
 ```
 
+CI 里的 Linux 包是在 `manylinux2014` 容器（CentOS 7 基础，glibc 2.17）中构建的，可在 CentOS 7 / Alibaba Cloud Linux 2/3、Ubuntu 16.04+ 等系统上直接运行（仅 x86_64）。只有在更老的 glibc（如 CentOS 6）上才会出现 `GLIBC_2.xx not found` 报错，那种情况建议改用源码 + systemd 部署。
+
 Linux 部署包同样必须自带 Windows 的 `客户微信登录助手.exe`（客户下载后在自己电脑上运行）。构建脚本会依次从 `YDTV_WECHAT_HELPER_EXE`、`downloads/客户微信登录助手.exe`、`downloads/ydtv-wechat-login.exe`、`dist/ydtv-wechat-login.exe` 查找，找不到就直接报错；只有本地测试才用 `YDTV_ALLOW_MISSING_HELPER=1` 跳过。CI 会先构建 Windows 助手，再把 EXE 传给 Linux 打包任务。
 
 构建结果位于：

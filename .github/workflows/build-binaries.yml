@@ -54,19 +54,24 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
       - name: Download Windows WeChat helper
         uses: actions/download-artifact@v4
         with:
           name: ydtv-wechat-login-exe
           path: downloads
-      - name: Build Linux server package
-        shell: bash
-        env:
-          YDTV_WECHAT_HELPER_EXE: downloads/ydtv-wechat-login.exe
-        run: bash build/build_linux.sh
+      # 在 manylinux2014（CentOS 7 基础，glibc 2.17）里构建，
+      # 让产物可以运行在 CentOS 7 / Alibaba Cloud Linux 2/3 等老系统上。
+      - name: Build Linux server package (manylinux2014)
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work \
+            -e PYTHON_BIN=/opt/python/cp311-cp311/bin/python3.11 \
+            -e YDTV_WECHAT_HELPER_EXE=downloads/ydtv-wechat-login.exe \
+            quay.io/pypa/manylinux2014_x86_64 \
+            bash build/build_linux.sh
+      - name: Report bundled glibc requirement
+        run: |
+          objdump -T dist/ydtv-signin/_internal/libpython3.11.so.1.0 \
+            | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -3
       - name: Upload Linux server package
         uses: actions/upload-artifact@v4
         with:

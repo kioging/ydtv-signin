@@ -4,10 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+PYTHON_BIN="${PYTHON_BIN:-python3.11}"
+
 if [[ ! -x .venv/bin/python ]]; then
-  python3.11 -m venv .venv
+  "$PYTHON_BIN" -m venv .venv
 fi
 
+.venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements-build.txt
 
 .venv/bin/python -m PyInstaller --noconfirm --clean ydtv-signin.spec
