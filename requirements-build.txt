@@ -1,6 +1,6 @@
 -r requirements.txt
 pyinstaller==6.16.0
-# setuptools 70+ 的 vendored jaraco.context 在 Python < 3.12 下需要它，
-# 否则打包后的程序启动时会报 ModuleNotFoundError: No module named 'backports'。
+# setuptools 70+ vendors jaraco.context, which imports backports.tarfile on
+# Python < 3.12; keep it installed so packaged builds can start.
 backports.tarfile==1.2.0
 

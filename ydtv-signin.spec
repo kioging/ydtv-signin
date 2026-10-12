@@ -23,8 +23,8 @@ for package in ("uvicorn", "apscheduler", "argon2"):
 datas += collect_data_files("tzdata")
 hiddenimports += collect_submodules("fastapi")
 hiddenimports += collect_submodules("starlette")
-# setuptools 79 的 vendored jaraco.context 会 `from backports import tarfile`，
-# 不显式打包会导致启动时报 ModuleNotFoundError。
+# setuptools vendors jaraco.context, which does "from backports import tarfile"
+# on Python < 3.12; bundle it explicitly to avoid a startup ImportError.
 hiddenimports += ["backports", "backports.tarfile"]
 hiddenimports += [
     "app.main",
