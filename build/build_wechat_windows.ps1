@@ -20,6 +20,9 @@ $stage = Join-Path $root "release\ydtv-wechat-login-windows"
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item "dist\ydtv-wechat-login.exe" $stage
+$downloadDir = Join-Path $root "downloads"
+New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+Copy-Item "dist\ydtv-wechat-login.exe" (Join-Path $downloadDir "ydtv-wechat-login.exe")
 $readme = @(
     "ydtv.ai WeChat Login Helper",
     "",

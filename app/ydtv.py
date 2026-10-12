@@ -241,14 +241,6 @@ class YdtvClient:
             },
         )
 
-    def get_wechat_auth_url(self, domain: str) -> ApiResponse:
-        return self._request(
-            "POST",
-            "/denglu/weixin/huoququanurl",
-            token=None,
-            json_body={"当前网站域名": domain},
-        )
-
     def login_wechat(self, code: str, domain: str) -> ApiResponse:
         return self._request(
             "POST",

@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .auth import (
@@ -52,6 +52,8 @@ DATA_ROOT = Path(os.environ.get("YDTV_DATA_DIR", str(DATA_DEFAULT))).resolve()
 CONFIG_PATH = DATA_ROOT / "config.json"
 ACCOUNTS_PATH = DATA_ROOT / "accounts.json"
 DATABASE_PATH = DATA_ROOT / "data" / "signin.db"
+WECHAT_HELPER_PATH = DATA_ROOT / "downloads" / "客户微信登录助手.exe"
+WECHAT_HELPER_FALLBACK_PATH = DATA_ROOT / "downloads" / "ydtv-wechat-login.exe"
 
 config = load_config(CONFIG_PATH)
 migrate(DATABASE_PATH)
@@ -145,6 +147,18 @@ def require_csrf(token: str | None) -> None:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/downloads/wechat-helper")
+async def download_wechat_helper(_: None = Depends(require_auth)):
+    helper_path = WECHAT_HELPER_PATH if WECHAT_HELPER_PATH.exists() else WECHAT_HELPER_FALLBACK_PATH
+    if not helper_path.exists():
+        raise HTTPException(status_code=404, detail="微信登录助手尚未部署")
+    return FileResponse(
+        helper_path,
+        media_type="application/vnd.microsoft.portable-executable",
+        filename="客户微信登录助手.exe",
+    )
 
 
 @app.get("/login")
@@ -491,24 +505,6 @@ async def account_login(
     token = require_login_token(response)
     logger.info("User action: account login, type=%s", payload.type)
     return JSONResponse({"ok": True, **save_logged_in_account(client, token)})
-
-
-@app.post("/dashboard/api/account-login/wechat/start")
-async def account_login_wechat_start(
-    csrf_header: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
-    _: None = Depends(require_auth),
-):
-    require_csrf(csrf_header)
-    domain = urlparse(config.site.base_url).hostname or "ydtv.ai"
-    response = login_client().get_wechat_auth_url(domain)
-    if response.status_code != 200 or response.payload.get("code") != 200:
-        raise HTTPException(status_code=400, detail=response_error(response, "微信授权地址获取失败"))
-    data = response.payload.get("data") or {}
-    auth_url = str(data.get("authUrl") or "")
-    if not auth_url:
-        raise HTTPException(status_code=502, detail="微信授权地址为空")
-    logger.info("User action: start WeChat account login")
-    return JSONResponse({"url": auth_url, "state": str(data.get("state") or "")})
 
 
 @app.post("/dashboard/api/account-login/wechat/callback")

@@ -37,11 +37,13 @@
         </label>
       </div>
       <div class="login-panel" data-login-panel="wechat" hidden>
-        <button class="action-button" id="start-wechat-login" type="button">打开微信登录窗口</button>
         <label>登录完成后粘贴最终回调地址
           <textarea id="wechat-callback" rows="3" placeholder="https://lingkeai.ai/weixin-callback?code=...&state=..."></textarea>
         </label>
-        <button class="action-button" id="complete-wechat-login" type="button">导入微信登录结果</button>
+        <div class="wechat-actions">
+          <a class="action-button" href="/downloads/wechat-helper">下载微信登录工具</a>
+          <button class="action-button" id="complete-wechat-login" type="button">导入微信登录结果</button>
+        </div>
       </div>
       <div class="credential-captcha" id="credential-captcha">
         <label>图形验证码

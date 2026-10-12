@@ -138,21 +138,6 @@ async function submitCredentialLogin() {
   }
 }
 
-async function startWeChatLogin() {
-  const popup = window.open("", "ydtv-wechat-login", "width=520,height=720");
-  try {
-    const result = await apiFetch("/dashboard/api/account-login/wechat/start", {
-      method: "POST",
-      body: "{}",
-    });
-    if (popup) popup.location.href = result.url;
-    showLoginMessage("pending", "请在新窗口完成微信登录，然后粘贴最终回调地址");
-  } catch (error) {
-    if (popup) popup.close();
-    showLoginMessage("error", error.message);
-  }
-}
-
 async function completeWeChatLogin() {
   const callback = document.getElementById("wechat-callback").value.trim();
   if (!callback) {
@@ -182,7 +167,6 @@ document.getElementById("refresh-captcha").addEventListener("click", refreshCapt
 document.getElementById("submit-account-login").addEventListener("click", submitCredentialLogin);
 document.getElementById("send-phone-code").addEventListener("click", () => sendCode("phone"));
 document.getElementById("send-email-code").addEventListener("click", () => sendCode("email"));
-document.getElementById("start-wechat-login").addEventListener("click", startWeChatLogin);
 document.getElementById("complete-wechat-login").addEventListener("click", completeWeChatLogin);
 document.querySelectorAll("[data-login-tab]").forEach((button) => {
   button.addEventListener("click", () => selectLoginType(button.dataset.loginTab));

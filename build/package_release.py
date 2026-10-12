@@ -31,6 +31,7 @@ def main() -> int:
     parser.add_argument("--dist", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--platform", required=True, choices=["windows", "linux"])
+    parser.add_argument("--helper-exe", help="Optional Windows WeChat helper executable")
     args = parser.parse_args()
 
     dist = Path(args.dist).resolve()
@@ -46,6 +47,13 @@ def main() -> int:
     (stage / "logs").mkdir(exist_ok=True)
     (stage / "accounts.json").write_text('{\n  "accounts": []\n}\n', encoding="utf-8")
     (stage / "README-DEPLOY.txt").write_text(DEPLOY_README, encoding="utf-8")
+    if args.helper_exe:
+        helper = Path(args.helper_exe).resolve()
+        if not helper.exists():
+            raise FileNotFoundError(f"WeChat helper not found: {helper}")
+        downloads = stage / "downloads"
+        downloads.mkdir(exist_ok=True)
+        shutil.copy2(helper, downloads / "客户微信登录助手.exe")
 
     if args.platform == "windows":
         (stage / "start.bat").write_text(

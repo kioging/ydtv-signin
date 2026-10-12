@@ -57,23 +57,3 @@ def test_password_login_payload_does_not_send_plain_password():
     assert "token" not in captured["headers"]
 
 
-def test_wechat_auth_url_payload():
-    captured = {}
-
-    class FakeTransport:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc_value, traceback):
-            return False
-
-        def handle_request(self, request):
-            captured["url"] = str(request.url)
-            captured["body"] = request.content.decode("utf-8")
-            return httpx.Response(200, json={"code": 200, "data": {"authUrl": "https://example.com"}})
-
-    client = YdtvClient("https://example.com", "/houduan", "zh", transport=FakeTransport())
-    client.get_wechat_auth_url("ydtv.ai")
-    assert captured["url"].endswith("/houduan/denglu/weixin/huoququanurl")
-    assert "ydtv.ai" in captured["body"]
-

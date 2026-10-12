@@ -7,41 +7,56 @@ on:
       - "v*"
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            platform: windows
-          - os: ubuntu-22.04
-            platform: linux
-    runs-on: ${{ matrix.os }}
+  build-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Build Windows release
-        if: runner.os == 'Windows'
+      - name: Build Windows server package
         shell: pwsh
         run: .\build\build_windows.ps1
-      - name: Build Windows WeChat helper
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: .\build\build_wechat_windows.ps1
-      - name: Build Linux release
-        if: runner.os == 'Linux'
-        shell: bash
-        run: bash build/build_linux.sh
-      - uses: actions/upload-artifact@v4
+      - name: Upload Windows server package
+        uses: actions/upload-artifact@v4
         with:
-          name: ydtv-signin-${{ matrix.platform }}-x64
-          path: release/ydtv-signin-${{ matrix.platform }}-x64.zip
+          name: ydtv-signin-windows-x64
+          path: release/ydtv-signin-windows-x64.zip
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: runner.os == 'Windows'
+      - name: Upload Windows WeChat helper ZIP
+        uses: actions/upload-artifact@v4
         with:
           name: ydtv-wechat-login-windows-x64
           path: release/ydtv-wechat-login-windows-x64.zip
+          if-no-files-found: error
+      - name: Upload Windows WeChat helper EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: ydtv-wechat-login-exe
+          path: dist/ydtv-wechat-login.exe
+          if-no-files-found: error
+
+  build-linux:
+    needs: build-windows
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Download Windows WeChat helper
+        uses: actions/download-artifact@v4
+        with:
+          name: ydtv-wechat-login-exe
+          path: downloads
+      - name: Build Linux server package
+        shell: bash
+        env:
+          YDTV_WECHAT_HELPER_EXE: downloads/ydtv-wechat-login.exe
+        run: bash build/build_linux.sh
+      - name: Upload Linux server package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ydtv-signin-linux-x64
+          path: release/ydtv-signin-linux-x64.zip
           if-no-files-found: error

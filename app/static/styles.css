@@ -79,12 +79,17 @@ main { max-width: 1080px; margin: 0 auto; padding: 24px; }
 h1, h2 { margin: 0 0 16px; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .action-button {
+  display: inline-block;
   width: auto;
   margin-top: 0;
   padding: 9px 14px;
+  border: 0;
   font-size: 13px;
   border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
 }
+.action-button:hover { background: #115e59; }
 .action-button.secondary {
   background: #eef2f6;
   color: var(--text);
@@ -182,6 +187,8 @@ h1, h2 { margin: 0 0 16px; }
 .agreement-row input { width: auto; }
 .login-actions { display: flex; gap: 10px; margin-top: 14px; }
 .login-wizard .auth-status { margin: 14px 0 0; }
+.wechat-actions { display: flex; flex-direction: column; gap: 10px; }
+.wechat-actions .action-button { display: block; width: 100%; text-align: center; }
 textarea {
   width: 100%;
   padding: 10px;
