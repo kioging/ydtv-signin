@@ -98,9 +98,9 @@ jobs:
             | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -3
       - name: Smoke test Linux binary
         run: |
-          cd release/ydtv-signin-linux
-          printf '{"web": {"host": "127.0.0.1", "port": 8850}}' > config.json
-          ./ydtv-signin &
+          workdir=$(mktemp -d)
+          printf '{"web": {"host": "127.0.0.1", "port": 8850}}' > "$workdir/config.json"
+          YDTV_DATA_DIR="$workdir" release/ydtv-signin-linux/ydtv-signin &
           pid=$!
           ok=0
           for _ in $(seq 1 30); do
