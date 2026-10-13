@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import zipfile
@@ -44,7 +45,13 @@ def test_linux_package_includes_wechat_helper(tmp_path):
     assert result.returncode == 0, result.stderr
     archive = output / "ydtv-signin-linux-x64.zip"
     with zipfile.ZipFile(archive) as handle:
-        assert f"ydtv-signin-linux/downloads/{HELPER_NAME}" in handle.namelist()
+        names = handle.namelist()
+        assert f"ydtv-signin-linux/downloads/{HELPER_NAME}" in names
+        for script in ("start.sh", "stop.sh", "restart.sh", "install-service.sh", "uninstall-service.sh"):
+            assert f"ydtv-signin-linux/{script}" in names
+            if os.name == "posix":
+                mode = handle.getinfo(f"ydtv-signin-linux/{script}").external_attr >> 16
+                assert mode & 0o111, f"{script} should be executable in the zip"
         assert handle.read(f"ydtv-signin-linux/downloads/{HELPER_NAME}").startswith(b"MZ")
 
 

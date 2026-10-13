@@ -6,6 +6,17 @@ import zipfile
 from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LINUX_DEPLOY_DIR = PROJECT_ROOT / "deploy" / "linux"
+LINUX_SCRIPTS = (
+    "start.sh",
+    "stop.sh",
+    "restart.sh",
+    "install-service.sh",
+    "uninstall-service.sh",
+)
+
+
 DEPLOY_README = """\
 ydtv.ai automatic sign-in service
 
@@ -20,7 +31,12 @@ ydtv.ai automatic sign-in service
 
 3. Start the service:
    Windows: start.bat
-   Linux:   ./start.sh
+   Linux:
+     bash start.sh                  # 前台运行，Ctrl+C 停止
+     bash restart.sh                # 停止旧进程并后台启动（日志 logs/ydtv-signin.log）
+     bash stop.sh                   # 停止（systemd 安装过就走 systemctl）
+     sudo bash install-service.sh   # 注册成 systemd 服务（开机自启、崩溃自动重启）
+     sudo bash uninstall-service.sh # 卸载 systemd 服务（保留配置和数据）
 
 The service listens on 0.0.0.0:8848 by default.
 Configuration, account tokens, logs and data are stored beside the executable.
@@ -77,12 +93,13 @@ def main() -> int:
             encoding="utf-8",
         )
     else:
-        start_script = stage / "start.sh"
-        start_script.write_text(
-            '#!/usr/bin/env sh\ncd "$(dirname "$0")"\nexec ./ydtv-signin\n',
-            encoding="utf-8",
-        )
-        start_script.chmod(0o755)
+        for script_name in LINUX_SCRIPTS:
+            source = LINUX_DEPLOY_DIR / script_name
+            if not source.exists():
+                raise FileNotFoundError(f"Linux deploy script not found: {source}")
+            script = stage / script_name
+            shutil.copy2(source, script)
+            script.chmod(0o755)
         binary = stage / "ydtv-signin"
         if binary.exists():
             binary.chmod(0o755)

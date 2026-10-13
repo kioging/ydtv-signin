@@ -18,6 +18,11 @@ jobs:
         run: pip install -r requirements.txt pytest==9.1.1
       - name: Run test suite
         run: python -m pytest -q
+      - name: Check shell script syntax
+        run: |
+          for script in build/*.sh deploy/linux/*.sh; do
+            bash -n "$script"
+          done
 
   build-windows:
     needs: test

@@ -157,5 +157,15 @@ Linux:
   ./start.sh           # 启动面板
 ```
 
+Linux 部署包根目录还带有以下快捷脚本：
+
+| 脚本 | 作用 |
+| --- | --- |
+| `start.sh` | 前台启动，日志输出到终端，Ctrl+C 停止 |
+| `restart.sh` | 停止旧进程后后台启动（日志 `logs/ydtv-signin.log`）；已安装 systemd 时走 `systemctl restart` |
+| `stop.sh` | 停止服务，systemd 与手动启动的进程都能停 |
+| `install-service.sh` | `sudo bash install-service.sh` 注册 systemd 服务（开机自启、崩溃自动重启），可用 `sudo SERVICE_USER=用户名 bash install-service.sh` 指定运行用户 |
+| `uninstall-service.sh` | `sudo bash uninstall-service.sh` 卸载 systemd 服务，保留 `config.json`、`accounts.json`、`data/`、`logs/` |
+
 PyInstaller 不支持 Windows/Linux 交叉编译。Windows 包需要在 Windows 构建，Linux 包需要在 Linux 构建。仓库中的 `.github/workflows/build-binaries.yml` 会在两个原生 runner 上分别生成 ZIP。
 
