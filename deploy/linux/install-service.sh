@@ -37,9 +37,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=${SERVICE_USER}
-WorkingDirectory="${APP_DIR}"
-Environment="YDTV_DATA_DIR=${APP_DIR}"
-ExecStart="${APP_DIR}/${SERVICE_NAME}"
+WorkingDirectory=${APP_DIR}
+Environment=YDTV_DATA_DIR=${APP_DIR}
+ExecStart=${APP_DIR}/${SERVICE_NAME}
 Restart=always
 RestartSec=5
 
